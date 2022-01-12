@@ -8,7 +8,13 @@ export type Cytat_t = {
     votes: number;
     info: string;
     msg: string;
+    original_msg: string;
     uuid:string;
+    history:{
+        created:number;
+        created_by:string;
+        edits:{by:string,date:number,change:string,type:string}[]
+    }
 }
 
 export type User = {
@@ -24,8 +30,20 @@ export type BtnAction = {
     createdAt?:number;
 }
 
+export type Server = {
+    cytaty: Cytat_t[];
+    config:{
+        permissions: {[key:string]:"edit"|"admin"};
+        vote_cooldown: number;
+    }
+
+    voted_users: {[key:string]:{ts:number}};
+}
+
 export interface Users {[key:string]:User}
 
 export interface BtnActions {[key:number]:BtnAction}
+
+export interface Servers {[key:string]:Server}
 
 export type Replayable = Discord.Message|ButtonInteraction;
