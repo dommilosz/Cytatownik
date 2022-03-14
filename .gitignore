@@ -1,0 +1,9 @@
+/node_modules/
+/servers/
+/.idea/
+/firebase_secret.json
+/config.json
+/cytaty.json
+/cytaty2.json
+/votedUsers.json
+/backup/

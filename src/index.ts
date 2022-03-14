@@ -3,6 +3,16 @@ import * as Discord from "discord.js";
 import {Intents, Message, MessageActionRow, MessageButtonStyleResolvable, Permissions} from "discord.js";
 import {checkSimilarity, createUUID, getFilesizeInBytes, getRandomInt, normalizeStr} from "./util";
 import {BtnAction, BtnActions, Cytat_t, miesiace, QuoteMaxLength, Replayable, Servers, User, Users} from "./header";
+let serviceAccount = require("../firebase_secret.json");
+
+import admin from "firebase-admin";
+import {getFirestore} from "firebase-admin/firestore";
+import {initializeApp} from "firebase-admin/app";
+
+let defaultApp = initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+});
+export const firebase = getFirestore(defaultApp);
 
 const client = new Discord.Client({intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MESSAGES]});
 
@@ -17,24 +27,31 @@ try {
 
 }
 
-function loadServerData(server_id: string, force: boolean = false, backup_index: number = -1) {
+async function loadServerData(server_id: string, force: boolean = false, backup_index: number = -1) {
     try {
-        if (!force) {
-            if (servers[server_id]) {
-                return servers[server_id];
-            }
-        }
         if (backup_index > 0) {
-            servers[server_id] = JSON.parse(fs.readFileSync(getServerBackupFile(server_id, String(backup_index)), "utf-8"));
-        } else {
-            if(fs.existsSync(getServerFolder(server_id)+"cytaty.json")){
+            let server = (await firebase.collection("backups").doc(server_id).collection("backups").doc(`${+new Date()}`).get()).data();
+            if(!server||!server.config){
                 servers[server_id] = {config: {permissions: {}, vote_cooldown: 86_400}, cytaty: [], voted_users: {}};
-                servers[server_id].cytaty = JSON.parse(fs.readFileSync(getServerFolder(server_id)+"cytaty.json","utf-8"));
-                saveServerData(server_id);
-                fs.unlinkSync(getServerFolder(server_id)+"cytaty.json");
+                await saveServerData(server_id);
                 return;
             }
-            servers[server_id] = JSON.parse(fs.readFileSync(getServerCurrentFile(server_id), "utf-8"));
+            // @ts-ignore
+            servers[server_id] = server;
+        } else {
+            if (!force) {
+                if (servers[server_id]) {
+                    return servers[server_id];
+                }
+            }
+            let server = (await firebase.collection("servers").doc(server_id).get()).data();
+            if(!server||!server.config){
+                servers[server_id] = {config: {permissions: {}, vote_cooldown: 86_400}, cytaty: [], voted_users: {}};
+                await saveServerData(server_id);
+                return;
+            }
+            // @ts-ignore
+            servers[server_id] = server;
         }
         servers[server_id].cytaty.forEach(el => {
             if (!el.uuid) {
@@ -47,32 +64,12 @@ function loadServerData(server_id: string, force: boolean = false, backup_index:
     }
 }
 
-function saveServerData(server_id: string, _backup: boolean = false) {
+async function saveServerData(server_id: string, _backup: boolean = false) {
     try {
-        if (!fs.existsSync("./servers")) {
-            fs.mkdirSync("./servers");
-        }
-        if (!fs.existsSync(getServerFolder(server_id))) {
-            fs.mkdirSync(getServerFolder(server_id));
-        }
         if (_backup) {
-            if (!fs.existsSync(getServerBackupFolder(server_id))) {
-                fs.mkdirSync(getServerBackupFolder(server_id));
-            }
-            fs.writeFileSync(getServerBackupFile(server_id, String(+new Date())), JSON.stringify(servers[server_id]), 'utf8');
-            let fileList = fs.readdirSync(getServerBackupFolder(server_id));
-            while (fileList.length > 11) {
-                let min = -1;
-                fileList.forEach(el => {
-                    let ts = parseInt(el.split(".json")[0].split("b_")[1]);
-                    if (ts < min || min < 0) min = ts;
-                })
-
-                fs.unlinkSync(getServerBackupFile(server_id, String(min)));
-                fileList = fs.readdirSync(getServerBackupFolder(server_id));
-            }
+            await firebase.collection("backups").doc(server_id).collection("backups").doc(`${+new Date()}`).set(servers[server_id])
         } else {
-            fs.writeFileSync(getServerCurrentFile(server_id), JSON.stringify(servers[server_id]), 'utf8');
+            await firebase.collection("servers").doc(server_id).set(servers[server_id])
         }
         return true;
     } catch {
@@ -87,7 +84,6 @@ async function main() {
 }
 
 main();
-
 
 client.on('messageCreate', async message => {
     if (message.content.startsWith('~')) {
@@ -139,9 +135,9 @@ async function buttonAction(message: Discord.ButtonInteraction): Promise<boolean
     let btn_action = button_actions[Number(_id[0])];
     if (!btn_action) {
         if (Math.random() < 0.05) {
-            message.reply(`Inwalida prince polo akcja!`);
+            await message.reply(`Inwalida prince polo akcja!`);
         } else {
-            message.reply(`Invalid button action!`);
+            await message.reply(`Invalid button action!`);
         }
 
         return false;
@@ -151,10 +147,10 @@ async function buttonAction(message: Discord.ButtonInteraction): Promise<boolean
         if (btn_action.action == "rem-uuid") {
             if (!message.guild.members.cache.get(message.member.user.id).permissions.has([Permissions.FLAGS.MANAGE_GUILD]))
                 if (btn_action.author != message.member.user.id) {
-                    message.reply(`Only author or admin can do it!`);
+                    await message.reply(`Only author or admin can do it!`);
                     return false;
                 }
-            saveServerData(message.guild.id, true)
+            await saveServerData(message.guild.id, true)
             let uuid = (btn_action.data);
             let deleted_id = -1;
             let deleted_cytat;
@@ -166,12 +162,12 @@ async function buttonAction(message: Discord.ButtonInteraction): Promise<boolean
                     return;
                 }
             })
-            saveServerData(message.guild.id);
+            await saveServerData(message.guild.id);
             if (deleted_id >= 0) {
                 await message.reply(`Usunieto ${deleted_id}: ${deleted_cytat.msg}`);
                 return true;
             } else {
-                message.reply(`Nie znaleziono!`)
+                await message.reply(`Nie znaleziono!`)
                 return false;
             }
         }
@@ -183,14 +179,14 @@ async function buttonAction(message: Discord.ButtonInteraction): Promise<boolean
             let _old = btn_action.data.old;
             let _new = btn_action.data.new;
             if (!checkPerms(message, "admin")) return;
-            saveServerData(message.guild.id, true)
+            await saveServerData(message.guild.id, true)
             servers[message.guild.id].cytaty.forEach((el: any, i: number) => {
                 let osoba = getUser(el)
                 if (osoba === _old) {
                     servers[message.guild.id].cytaty[i].msg = servers[message.guild.id].cytaty[i].msg.replace(_old, _new);
                 }
             });
-            saveServerData(message.guild.id);
+            await saveServerData(message.guild.id);
             await message.reply(`Zamieniono "${_old}" na ${_new}`);
             return true;
         }
@@ -202,7 +198,7 @@ async function buttonAction(message: Discord.ButtonInteraction): Promise<boolean
 
 async function handleCmd(content: string, message: Replayable) {
     const args = content.replace('~', '').split(' ');
-    loadServerData(message.guild.id);
+    await loadServerData(message.guild.id);
 
     if (args[0] === "add" || args[0] === "add-no-similarity") {
         let no_similarity = false;
@@ -221,7 +217,7 @@ async function handleCmd(content: string, message: Replayable) {
         if (!verifyCytat(cytat, message, no_similarity)) return;
 
         servers[message.guild.id].cytaty.push(cytat);
-        saveServerData(message.guild.id);
+        await saveServerData(message.guild.id);
 
         const row = new Discord.MessageActionRow().addComponents(CreateActionButton({
             action: "rem-uuid",
@@ -310,14 +306,14 @@ async function handleCmd(content: string, message: Replayable) {
         let osobySorted: any = [];
 
         if (args[1] === "votes") {
-            servers[message.guild.id].cytaty.forEach((el: any, i: any) => {
+            servers[message.guild.id].cytaty.forEach((el: any) => {
                 if (!el.votes) {
                     el.votes = 0;
                 }
                 osoby[el.msg] = el.votes;
             })
         } else {
-            servers[message.guild.id].cytaty.forEach((el: any, i: any) => {
+            servers[message.guild.id].cytaty.forEach((el: any) => {
                 let osoba = getUser(el)
                 if (!osoby[osoba]) {
                     osoby[osoba] = 0;
@@ -359,7 +355,7 @@ async function handleCmd(content: string, message: Replayable) {
         if (!checkPerms(message, "admin")) return;
         let prevName = message.content.split('"')[1];
         let newName = message.content.split('"')[3];
-        saveServerData(message.guild.id, true)
+        await saveServerData(message.guild.id, true)
         if (!prevName || !newName) {
             await message.reply('Format komendy: ~transfer "name" "newname"');
             return;
@@ -370,7 +366,7 @@ async function handleCmd(content: string, message: Replayable) {
                 servers[message.guild.id].cytaty[i].msg = servers[message.guild.id].cytaty[i].msg.replace(prevName, newName);
             }
         });
-        saveServerData(message.guild.id);
+        await saveServerData(message.guild.id);
         await message.reply(`Zamieniono "${prevName}" na ${newName}`);
         return;
     }
@@ -380,9 +376,9 @@ async function handleCmd(content: string, message: Replayable) {
 
         if (!checkIndex(message, i)) return;
         let msg = servers[message.guild.id].cytaty[i].msg;
-        saveServerData(message.guild.id, true)
+        await saveServerData(message.guild.id, true)
         servers[message.guild.id].cytaty.splice(i, 1);
-        saveServerData(message.guild.id);
+        await saveServerData(message.guild.id);
         await message.reply(`Usunieto ${i}: ${msg}`)
 
 
@@ -399,9 +395,10 @@ async function handleCmd(content: string, message: Replayable) {
 
         if (!verifyCytat(cytat, message, false, true)) return;
         let msg2 = servers[message.guild.id].cytaty[i].msg;
-        saveServerData(message.guild.id, true)
+        await saveServerData(message.guild.id, true)
         servers[message.guild.id].cytaty[i] = cytat;
 
+        if(!servers[message.guild.id].cytaty[i].history)servers[message.guild.id].cytaty[i].history = {created: +new Date(), created_by: message.member.user.id, edits: []};
         if (!servers[message.guild.id].cytaty[i].history.edits) servers[message.guild.id].cytaty[i].history.edits = [];
         servers[message.guild.id].cytaty[i].history.edits.push({
             change: msg,
@@ -409,7 +406,7 @@ async function handleCmd(content: string, message: Replayable) {
             date: +new Date(),
             type: "msg"
         });
-        saveServerData(message.guild.id);
+        await saveServerData(message.guild.id);
 
         await message.reply(`Edytowano ${i}: ${msg2} na ${cytat.msg}`);
     }
@@ -441,7 +438,7 @@ async function handleCmd(content: string, message: Replayable) {
         if (!checkPerms(message, "admin")) return;
 
         try {
-            loadServerData(message.guild.id, true);
+            await loadServerData(message.guild.id, true);
             await message.reply("Reloaded");
         } catch {
             await message.reply("Error when reloading");
@@ -452,7 +449,10 @@ async function handleCmd(content: string, message: Replayable) {
         if (args[1] === "set") {
             let index = parseUUID(args[2], message);
             if (!checkIndex(message, index)) return;
-            saveServerData(message.guild.id, true)
+            await saveServerData(message.guild.id, true)
+            if(!servers[message.guild.id].cytaty[index].history)servers[message.guild.id].cytaty[index].history = {created: +new Date(), created_by: message.member.user.id, edits: []};
+            if (!servers[message.guild.id].cytaty[index].history.edits) servers[message.guild.id].cytaty[index].history.edits = [];
+
             servers[message.guild.id].cytaty[index].history.edits.push({
                 change: args.slice(3).join(" "),
                 by: message.member.user.id,
@@ -460,16 +460,16 @@ async function handleCmd(content: string, message: Replayable) {
                 type: "info"
             });
             servers[message.guild.id].cytaty[index].info = args.slice(3).join(" ");
-            saveServerData(message.guild.id);
+            await saveServerData(message.guild.id);
             await message.reply(`Ustawiono informacje o: ${servers[message.guild.id].cytaty[index].msg}\n${servers[message.guild.id].cytaty[index].info}`)
         } else if (args[1] === "rem") {
             if (!checkPerms(message, "admin")) return;
 
             let index = parseUUID(args[2], message);
             if (!checkIndex(message, index)) return;
-            saveServerData(message.guild.id, true)
+            await saveServerData(message.guild.id, true)
             servers[message.guild.id].cytaty[index].info = undefined;
-            saveServerData(message.guild.id);
+            await saveServerData(message.guild.id);
             await message.reply(`Ustawiono informacje o: ${servers[message.guild.id].cytaty[index].msg}\n${servers[message.guild.id].cytaty[index].info}`)
         } else if (args[1] === "lsnull") {
             let page: number = parseInt(args[2]);
@@ -509,8 +509,8 @@ async function handleCmd(content: string, message: Replayable) {
         await message.reply(`Historia cytatu: ${servers[message.guild.id].cytaty[index].msg}\n\`\`\`\n${txt}\n\`\`\``)
     }
     if (args[0] === "file") {
-        let sizeBytes = getFilesizeInBytes(getServerCurrentFile(message.guild.id));
-        await message.reply(`Informacje o pliku ${getServerCurrentFile(message.guild.id)}:\nRozmiar: ${sizeBytes}B\nIlość cytatów: ${servers[message.guild.id].cytaty.length}\nAby przeładować cytaty z pliku użyj ~reload`);
+        await loadServerData(message.guild.id);
+        await message.reply(`Informacje o pliku serwera ${message.guild.id}:\nIlość cytatów: ${servers[message.guild.id].cytaty.length}\nAby przeładować cytaty z pliku użyj ~reload`);
     }
     if (args[0] === "config") {
         if (!checkPerms(message, "admin")) return;
@@ -524,7 +524,7 @@ async function handleCmd(content: string, message: Replayable) {
                     }
                     servers[message.guild.id].config.permissions[role.id] = args[3];
                     await message.reply(`Added role: ${role.name} as ${args[3]}`);
-                    saveServerData(message.guild.id);
+                    await saveServerData(message.guild.id);
                     return;
                 } else {
                     await message.reply("Unknown permission: " + args[3]);
@@ -551,7 +551,7 @@ async function handleCmd(content: string, message: Replayable) {
                 }
                 delete servers[message.guild.id].config.permissions[role.id];
                 await message.reply(`Deleted role: ${role.name}`);
-                saveServerData(message.guild.id);
+                await saveServerData(message.guild.id);
                 return;
             }
         }
@@ -560,7 +560,7 @@ async function handleCmd(content: string, message: Replayable) {
             if(cooldown > 0){
                 await message.reply(`changed vote cooldown from: ${servers[message.guild.id].config.vote_cooldown} to: ${cooldown}`);
                 servers[message.guild.id].config.vote_cooldown = cooldown;
-                saveServerData(message.guild.id);
+                await saveServerData(message.guild.id);
                 return;
             }else{
                 await message.reply(`vote cooldown is: ${servers[message.guild.id].config.vote_cooldown}`);
@@ -585,13 +585,13 @@ async function handleCmd(content: string, message: Replayable) {
             if (!checkPerms(message, "admin")) return;
             let votes = parseInt(args[3])
             if (votes < 0 || isNaN(votes)) {
-                message.reply("Liczba nie moze być <0");
+                await message.reply("Liczba nie moze być <0");
                 return;
             }
 
             servers[message.guild.id].cytaty[i].votes = votes;
-            saveServerData(message.guild.id);
-            message.reply(`Ustawiono ilość głosów: ${servers[message.guild.id].cytaty[i].msg}\nIlość głosów: ${servers[message.guild.id].cytaty[i].votes}`)
+            await saveServerData(message.guild.id);
+            await message.reply(`Ustawiono ilość głosów: ${servers[message.guild.id].cytaty[i].msg}\nIlość głosów: ${servers[message.guild.id].cytaty[i].votes}`)
             return;
         }
 
@@ -602,7 +602,7 @@ async function handleCmd(content: string, message: Replayable) {
                 let timeLeft = servers[message.guild.id].voted_users[message.member.user.id.toString()].ts + (servers[message.guild.id].config.vote_cooldown * 1000) - ts;
                 let minutes = Math.floor(timeLeft / 1000 / 60);
                 let hours = Math.floor(minutes / 60);
-                message.reply(`You are still on cooldown: ${hours}h ${minutes % 60}m`)
+                await message.reply(`You are still on cooldown: ${hours}h ${minutes % 60}m`)
                 return;
             }
         }
@@ -611,58 +611,31 @@ async function handleCmd(content: string, message: Replayable) {
 
         if (!servers[message.guild.id].cytaty[i].votes) servers[message.guild.id].cytaty[i].votes = 0;
         servers[message.guild.id].cytaty[i].votes += 1;
-        saveServerData(message.guild.id);
-        message.reply(`Zagłosowano na: ${servers[message.guild.id].cytaty[i].msg}\nIlość głosów: ${servers[message.guild.id].cytaty[i].votes}`)
+        await saveServerData(message.guild.id);
+        await message.reply(`Zagłosowano na: ${servers[message.guild.id].cytaty[i].msg}\nIlość głosów: ${servers[message.guild.id].cytaty[i].votes}`)
         return;
     }
     if (args[0] === "backup") {
         if (!checkPerms(message, "admin")) return;
-        if (!fs.existsSync("./servers")) {
-            fs.mkdirSync("./servers");
-        }
-        if (!fs.existsSync(getServerFolder(message.guild.id))) {
-            fs.mkdirSync(getServerFolder(message.guild.id));
-        }
-        if (!fs.existsSync(getServerBackupFolder(message.guild.id))) {
-            fs.mkdirSync(getServerBackupFolder(message.guild.id));
-        }
-        let fileList = fs.readdirSync(getServerBackupFolder(message.guild.id)).reverse();
-        if (args[1] === "list") {
-            let msg = "```\nBackups:\n";
-
-            fileList.forEach((el, i) => {
-                if (i <= 9) {
-                    let ilosc = JSON.parse(fs.readFileSync(getServerBackupFile(message.guild.id,el), {encoding: "utf-8"})).cytaty.length;
-
-                    msg += `${i}: ${el} - ${ilosc} cytatow\n`
-                }
-
-            })
-            msg += "```"
-            message.reply(msg);
-        } else if (args[1] === "revert") {
+        if (args[1] === "revert") {
             let i = parseUUID(args[2], message);
             if (isNaN(i) || i < 0) {
-                message.reply(`Index nie może być < 0`)
-                return;
-            }
-            if (i > fileList.length - 1) {
-                message.reply(`Index nie może być > ilosci backupow`)
+                await message.reply(`Index nie może być < 0`)
                 return;
             }
             try {
-                saveServerData(message.guild.id, true);
-                loadServerData(message.guild.id, true, Number(fileList[i]))
-                saveServerData(message.guild.id);
-                message.reply(`Przywrocono ${fileList[i]}`)
+                await saveServerData(message.guild.id, true);
+                await loadServerData(message.guild.id, true, i)
+                await saveServerData(message.guild.id);
+                await message.reply(`Przywrocono ${i}`)
             } catch (e) {
                 console.log(e)
             }
         } else if (args[1] === "make") {
-            saveServerData(message.guild.id, true);
-            message.reply(`Stworzono backup`)
+            await saveServerData(message.guild.id, true);
+            await message.reply(`Stworzono backup`)
         } else {
-            message.reply(`Available commands: make, revert, list`);
+            await message.reply(`Available commands: make, revert, list`);
         }
     }
     if (args[0] === "verify") {
@@ -781,7 +754,7 @@ function showQuotes(message: Replayable, cytatyArr: Cytat_t[], page: number, txt
     let count = 0;
     let currPage = 0;
 
-    cytatyArr.forEach((el: any, i: any) => {
+    cytatyArr.forEach((el: any) => {
         if ((lista[currPage] + el.msg).length < 1800) {
 
         } else {
@@ -831,7 +804,7 @@ function checkPerms(message: Replayable, perms: "admin" | "edit") {
 
     if (!servers[message.guild.id].config.permissions) return false;
     message.guild.members.cache.get(message.member.user.id).roles.cache.forEach(role => {
-        if (servers[message.guild.id].config.permissions[role.id] === perms || servers[message.guild.id].config.permissions[role.id] === "edit") {
+        if (servers[message.guild.id].config.permissions[role.id] === perms || servers[message.guild.id].config.permissions[role.id] === "admin") {
             canDo = true;
             return;
         }
@@ -950,19 +923,4 @@ function getServerFolder(server_id: string) {
 
 function getServerCurrentFile(server_id: string) {
     return getServerFolder(server_id) + "_current.json";
-}
-
-function getServerBackupFolder(server_id: string) {
-    return getServerFolder(server_id) + "backup/";
-}
-
-function getServerBackupFile(server_id: string, backup_id: string) {
-    if(backup_id.includes(".json")){
-        backup_id = getBackupId(backup_id);
-    }
-    return getServerBackupFolder(server_id) + `b_${backup_id}.json`;
-}
-
-function getBackupId(filename:string){
-    return filename.split(".json")[0].split("b_")[1]
 }
