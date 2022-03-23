@@ -13,6 +13,9 @@ let defaultApp = initializeApp({
     credential: admin.credential.cert(serviceAccount),
 });
 export const firebase = getFirestore(defaultApp);
+firebase.settings({
+    ignoreUndefinedProperties: true,
+});
 
 const client = new Discord.Client({intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MESSAGES]});
 
@@ -65,15 +68,10 @@ async function loadServerData(server_id: string, force: boolean = false, backup_
 }
 
 async function saveServerData(server_id: string, _backup: boolean = false) {
-    try {
-        if (_backup) {
-            await firebase.collection("backups").doc(server_id).collection("backups").doc(`${+new Date()}`).set(servers[server_id])
-        } else {
-            await firebase.collection("servers").doc(server_id).set(servers[server_id])
-        }
-        return true;
-    } catch {
-        return false;
+    if (_backup) {
+        await firebase.collection("backups").doc(server_id).collection("backups").doc(`${+new Date()}`).set(servers[server_id])
+    } else {
+        await firebase.collection("servers").doc(server_id).set(servers[server_id])
     }
 }
 
@@ -105,9 +103,10 @@ client.on('interactionCreate', async interaction => {
             }
         }
     } catch (ex) {
-
+        if (interaction.isButton()) {
+            await interaction.reply(`ERROR: ${ex}`)
+        }
     }
-
 });
 
 function clearTimedOutActions() {
@@ -437,13 +436,14 @@ async function handleCmd(content: string, message: Replayable) {
     if (args[0] === "reload") {
         if (!checkPerms(message, "admin")) return;
 
-        try {
-            await loadServerData(message.guild.id, true);
-            await message.reply("Reloaded");
-        } catch {
-            await message.reply("Error when reloading");
-        }
-
+        await loadServerData(message.guild.id, true);
+        await message.reply("Reloaded");
+    }
+    if (args[0] === "dump") {
+        if (!checkPerms(message, "root")) return;
+        let filename = "./dump_"+message.guild.id+".json"
+        fs.writeFileSync(filename,JSON.stringify(servers[message.guild.id]),{encoding:"utf8"});
+        await message.reply(`dumped to ${filename}`);
     }
     if (args[0] === "info") {
         if (args[1] === "set") {
@@ -623,14 +623,10 @@ async function handleCmd(content: string, message: Replayable) {
                 await message.reply(`Index nie może być < 0`)
                 return;
             }
-            try {
-                await saveServerData(message.guild.id, true);
-                await loadServerData(message.guild.id, true, i)
-                await saveServerData(message.guild.id);
-                await message.reply(`Przywrocono ${i}`)
-            } catch (e) {
-                console.log(e)
-            }
+            await saveServerData(message.guild.id, true);
+            await loadServerData(message.guild.id, true, i)
+            await saveServerData(message.guild.id);
+            await message.reply(`Przywrocono ${i}`)
         } else if (args[1] === "make") {
             await saveServerData(message.guild.id, true);
             await message.reply(`Stworzono backup`)
@@ -798,7 +794,10 @@ function showQuotes(message: Replayable, cytatyArr: Cytat_t[], page: number, txt
 
 }
 
-function checkPerms(message: Replayable, perms: "admin" | "edit") {
+function checkPerms(message: Replayable, perms: "admin" | "edit"|"root") {
+    if(perms ==="root"){
+        return Number(message.member.user.id) == 410416517860032523;
+    }
     let canDo = false;
     if (message.guild.members.cache.get(message.member.user.id).permissions.has([Permissions.FLAGS.MANAGE_GUILD])) return true;
 
