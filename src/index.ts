@@ -445,6 +445,11 @@ async function handleCmd(content: string, message: Replayable) {
         fs.writeFileSync(filename,JSON.stringify(servers[message.guild.id]),{encoding:"utf8"});
         await message.reply(`dumped to ${filename}`);
     }
+    else if (args[0] === "uuid") {
+        let index = parseUUID(args[1], message);
+        if (!checkIndex(message, index)) return;
+        await message.reply(`UUID cytatu ${index}: ${servers[message.guild.id].cytaty[index].uuid}`)
+    }
     if (args[0] === "info") {
         if (args[1] === "set") {
             let index = parseUUID(args[2], message);
@@ -471,7 +476,8 @@ async function handleCmd(content: string, message: Replayable) {
             servers[message.guild.id].cytaty[index].info = undefined;
             await saveServerData(message.guild.id);
             await message.reply(`Ustawiono informacje o: ${servers[message.guild.id].cytaty[index].msg}\n${servers[message.guild.id].cytaty[index].info}`)
-        } else if (args[1] === "lsnull") {
+        }
+        else if (args[1] === "lsnull") {
             let page: number = parseInt(args[2]);
             if (!page) {
                 page = 1;
