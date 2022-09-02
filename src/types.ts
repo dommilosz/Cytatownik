@@ -1,10 +1,9 @@
 import * as Discord from "discord.js";
-import {ButtonInteraction} from "discord.js";
+import {ButtonInteraction, CommandInteraction} from "discord.js";
 
 export const QuoteMaxLength = 250;
-export const miesiace = ["Pani Styczeń", "Pani Luteń", "Pani Marzeń", "Pani Kwiecień", "Pani Majeń", "Pani Czerwień", "Pani Lipień", "Pani Sierpień", "Pani Wrzesień", "Pani Pazdziernień", "Pani Listopień", "Pani Grudzień"]
 
-export type Cytat_t = {
+export type QuoteType = {
     votes: number;
     info: string;
     msg: string;
@@ -19,7 +18,7 @@ export type Cytat_t = {
 
 export type User = {
     realname?: string;
-    quotes: Cytat_t[]
+    quotes: QuoteType[]
 }
 
 export type BtnAction = {
@@ -31,7 +30,7 @@ export type BtnAction = {
 }
 
 export type Server = {
-    cytaty: Cytat_t[];
+    quotes: QuoteType[];
     config:{
         permissions: {[key:string]:"edit"|"admin"};
         vote_cooldown: number;
