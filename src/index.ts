@@ -36,7 +36,7 @@ export const miesiace = ["Pani Styczeń", "Pani Luteń", "Pani Marzeń", "Pani K
 
 const client = new Discord.Client({intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]});
 
-let config: { token: string } = {token: ""}
+let config: { token: string, clientId:string } = {token: "",clientId:""}
 
 try {
     config = JSON.parse(fs.readFileSync('./config.json', 'utf8'))
@@ -45,7 +45,7 @@ try {
 }
 
 const rest = new REST({version: '10'}).setToken(config.token);
-const clientId = '767041973571813436';
+const clientId = config.clientId;
 
 async function main() {
     console.log("Starting...")
