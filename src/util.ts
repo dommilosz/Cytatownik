@@ -35,8 +35,7 @@ export function getFilesizeInBytes(filename: fs.PathLike) {
 }
 
 export function checkSimilarity(a, b){
-    let similarity = stringSimilarity.compareTwoStrings(a,b);
-    return similarity;
+    return stringSimilarity.compareTwoStrings(a, b);
 }
 
 export function createUUID(){
@@ -66,4 +65,14 @@ export function checkPerms(message: Replayable, perms: "admin" | "edit" | "root"
 
 export function getUser(cytat: QuoteType) {
     return cytat.msg.split('~')[cytat.msg.split('~').length - 1].trim();
+}
+
+export function parseUUID(uuid, message: Replayable) {
+    let _i = uuid;
+    servers[message.guild.id].quotes.forEach((el, i) => {
+        if (el.uuid == uuid) {
+            _i = i;
+        }
+    })
+    return parseInt(_i);
 }

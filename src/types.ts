@@ -1,5 +1,5 @@
 import * as Discord from "discord.js";
-import {ButtonInteraction, CommandInteraction} from "discord.js";
+import {ButtonInteraction} from "discord.js";
 
 export const QuoteMaxLength = 250;
 
@@ -8,11 +8,11 @@ export type QuoteType = {
     info: string;
     msg: string;
     original_msg: string;
-    uuid:string;
-    history:{
-        created:number;
-        created_by:string;
-        edits:{by:string,date:number,change:string,type:string}[]
+    uuid: string;
+    history: {
+        created: number;
+        created_by: string;
+        edits: { by: string, date: number, change: string, type: string }[]
     }
 }
 
@@ -23,26 +23,32 @@ export type User = {
 
 export type BtnAction = {
     cmd?: string;
-    action?:string;
-    author?:string;
-    data?:any;
-    createdAt?:number;
+    action?: string;
+    author?: string;
+    data?: any;
+    createdAt?: number;
 }
 
 export type Server = {
     quotes: QuoteType[];
-    config:{
-        permissions: {[key:string]:"edit"|"admin"};
+    config: {
+        permissions: { [key: string]: "edit" | "admin" };
         vote_cooldown: number;
     }
 
-    voted_users: {[key:string]:{ts:number}};
+    voted_users: { [key: string]: { ts: number } };
 }
 
-export interface Users {[key:string]:User}
+export interface Users {
+    [key: string]: User
+}
 
-export interface BtnActions {[key:number]:BtnAction}
+export interface BtnActions {
+    [key: number]: BtnAction
+}
 
-export interface Servers {[key:string]:Server}
+export interface Servers {
+    [key: string]: Server
+}
 
-export type Replayable = Discord.Message|ButtonInteraction;
+export type Replayable = Discord.Message | ButtonInteraction;

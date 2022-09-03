@@ -153,14 +153,14 @@ export async function getQuote(message:Replayable,index?:number){
     });
 }
 
-export function showQuotes(message: Replayable, cytatyArr: QuoteType[], page: number, txt: string) {
+export function showQuotes(message: Replayable, quoteArr: QuoteType[], page: number, txt: string) {
     let msg = "";
     let lista: string[] = [];
 
     let count = 0;
     let currPage = 0;
 
-    cytatyArr.forEach((el: any) => {
+    quoteArr.forEach((el: any) => {
         if ((lista[currPage] + el.msg).length < 1800) {
 
         } else {
@@ -184,14 +184,14 @@ export function showQuotes(message: Replayable, cytatyArr: QuoteType[], page: nu
     let row: ActionRowBuilder;
     if (page > 1 || hasNextPage) {
         row = new ActionRowBuilder();
-        if (page > 1) row.addComponents(CreateActionButton({
+        row.addComponents(CreateActionButton({
             action: "pg",
-            data: {cytatyArr, page: page - 1, txt}
-        }, "Poprzednia strona"));
-        if (hasNextPage) row.addComponents(CreateActionButton({
+            data: {quoteArr: quoteArr, page: page - 1, txt}
+        }, "Poprzednia strona").setDisabled(page <= 1));
+        row.addComponents(CreateActionButton({
             action: "pg",
-            data: {cytatyArr, page: page + 1, txt}
-        }, "Nastepna strona"));
+            data: {quoteArr: quoteArr, page: page + 1, txt}
+        }, "Nastepna strona").setDisabled(!hasNextPage));
         message.reply({
             content: msg,
             // @ts-ignore
@@ -346,6 +346,7 @@ export async function showTopQuotes(message:Replayable,topVotes:boolean){
 }
 
 export async function editQuote(message:Replayable,index:number,newContent:string){
+    if (!checkPerms(message, "edit")) return;
     if (!checkIndex(message, index)) return;
 
     let cytat = servers[message.guild.id].quotes[index];

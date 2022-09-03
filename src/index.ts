@@ -2,16 +2,20 @@ import fs from "fs";
 import * as Discord from "discord.js";
 import {
     Message,
-    Permissions, Routes,
+    Permissions,
+    Routes,
     SlashCommandBuilder,
-    GatewayIntentBits, ActionRowBuilder, ButtonBuilder, PermissionsBitField, ButtonStyle, CommandInteraction
+    GatewayIntentBits,
+    PermissionsBitField,
+    ButtonStyle,
+    ChatInputCommandInteraction
 } from "discord.js";
 
-import {BtnAction, BtnActions, QuoteType, QuoteMaxLength, Replayable, Servers, User, Users} from "./types";
+import {Replayable} from "./types";
 import admin from "firebase-admin";
 import {REST} from "@discordjs/rest";
 import {loadServerData, saveServerData, servers} from "./serverData";
-import {button_actions, clearTimedOutActions, CreateActionButton} from "./buttons";
+import {button_actions, clearTimedOutActions} from "./buttons";
 import {
     addQuote,
     editQuote,
@@ -25,7 +29,8 @@ import {
     transferQuote, verifyQuotes,
     voteQuote
 } from "./quotes";
-import {checkPerms, getUser} from "./util";
+import {checkPerms, getUser, parseUUID} from "./util";
+import {handleAutocomplete, handleCommand} from "./interactions";
 
 export const miesiace = ["Pani Styczeń", "Pani Luteń", "Pani Marzeń", "Pani Kwiecień", "Pani Majeń", "Pani Czerwień", "Pani Lipień", "Pani Sierpień", "Pani Wrzesień", "Pani Pazdziernień", "Pani Listopień", "Pani Grudzień"]
 
@@ -49,8 +54,43 @@ async function main() {
 
     const commands = [
         new SlashCommandBuilder().setName('quote')
-            .addNumberOption(option=>option.setName("index").setDescription("Quote uuid or index"))
+            .addNumberOption(option => option.setName("index").setDescription("Quote uuid or index"))
             .setDescription('Replies with a random or specified quote.'),
+        new SlashCommandBuilder().setName('add')
+            .addStringOption(option => option.setName("content").setDescription("Quote content in format: content ~ person").setRequired(true))
+            .setDescription('Adds new quote to list.'),
+        new SlashCommandBuilder().setName('edit')
+            .addNumberOption(option => option.setName("index").setDescription("Quote uuid or index to edit").setRequired(true))
+            .addStringOption(option => option.setName("content").setDescription("Quote content in format: content ~ person").setRequired(true))
+            .setDescription('Edits a quote.'),
+        new SlashCommandBuilder().setName('remove')
+            .addNumberOption(option => option.setName("index").setDescription("Quote uuid or index to edit").setRequired(true))
+            .setDescription('Removes a quote.'),
+        new SlashCommandBuilder().setName('list')
+            .addNumberOption(option => option.setName("page").setDescription("List page to show"))
+            .addStringOption(option => option.setName("person").setDescription("Show only quotes for specific person").setAutocomplete(true))
+            .setDescription('Shows list of quotes'),
+        new SlashCommandBuilder().setName('info')
+            .addSubcommand(subcommand => subcommand.setName("get").setDescription("Get quote info").addNumberOption(option => option.setName("index").setDescription("Quote index or uuid").setRequired(true)))
+            .addSubcommand(subcommand => subcommand.setName("set").setDescription("Set quote info").addNumberOption(option => option.setName("index").setDescription("Quote index or uuid").setRequired(true)).addStringOption(option => option.setName("info").setDescription("Quote info").setRequired(true)))
+            .addSubcommand(subcommand => subcommand.setName("remove").setDescription("Remove quote info").addNumberOption(option => option.setName("index").setDescription("Quote index or uuid").setRequired(true)))
+            .addSubcommand(subcommand => subcommand.setName("without").setDescription("Show quotes without info").addNumberOption(option => option.setName("page").setDescription("List page to show")))
+            .setDescription('Manage info of quotes'),
+        new SlashCommandBuilder().setName('top')
+            .addSubcommand(subcommand => subcommand.setName("amount").setDescription("Show users with the most amount of quotes"))
+            .addSubcommand(subcommand => subcommand.setName("votes").setDescription("Show the most voted quotes"))
+            .setDescription('Show top of quotes'),
+        new SlashCommandBuilder().setName('vote')
+            .addNumberOption(option => option.setName("index").setDescription("Quote uuid or index").setRequired(true))
+            .setDescription('Vote on quote'),
+        new SlashCommandBuilder().setName('search')
+            .addStringOption(option => option.setName("search_phrase").setDescription("Phrase to search").setRequired(true))
+            .addNumberOption(option => option.setName("page").setDescription("List page to show"))
+            .setDescription('Search quotes'),
+        new SlashCommandBuilder().setName('reload')
+            .setDescription('Reloads server file'),
+
+
     ].map(command => command.toJSON());
 
     await rest.put(
@@ -81,19 +121,14 @@ client.on('interactionCreate', async interaction => {
                 let _id = interaction.customId.split(";");
                 delete button_actions[Number(_id[0])];
             }
-        }else if (interaction.isCommand()){
-            switch (interaction.commandName) {
-                case "quote":{
-                    // @ts-ignore
-                    let index = parseUUID(interaction.options?.getString('index'),interaction);
-                    // @ts-ignore
-                    return await getQuote(interaction,index)
-                }
-            }
-            //return await handleCmd(interaction.command.name,interaction)
+        } else if (interaction.isCommand() && interaction instanceof ChatInputCommandInteraction) {
+            await handleCommand(interaction)
+
+        } else if (interaction.isAutocomplete()) {
+            await handleAutocomplete(interaction)
         }
     } catch (ex) {
-        if (interaction.isButton()) {
+        if (interaction.isButton() || interaction.isCommand()) {
             await interaction.reply(`ERROR: ${ex}`)
         }
     }
@@ -146,7 +181,7 @@ async function buttonAction(message: Discord.ButtonInteraction): Promise<boolean
             }
         }
         if (btn_action.action == "pg") {
-            showQuotes(message, btn_action.data.quotesArr, btn_action.data.page, btn_action.data.txt);
+            showQuotes(message, btn_action.data.quoteArr, btn_action.data.page, btn_action.data.txt);
             return true;
         }
         if (btn_action.action == "merge") {
@@ -179,11 +214,11 @@ async function handleCmd(content: string, message: Replayable) {
         if (args[0] === "add-no-similarity") no_similarity = true;
 
         let msg = args.slice(1).join(" ");
-        return await addQuote(message,msg,no_similarity);
+        return await addQuote(message, msg, no_similarity);
     }
     if (args[0] === "q" || args[0] === "quote") {
         let index = parseUUID(args[1], message);
-        return await getQuote(message,index)
+        return await getQuote(message, index)
     }
     if (args[0] === "list") {
         let page: number = parseInt(args[1]);
@@ -192,7 +227,7 @@ async function handleCmd(content: string, message: Replayable) {
             page = 1;
             user = args.slice(1).join(" ");
         }
-        return await listQuotes(message,user,page)
+        return await listQuotes(message, user, page)
     }
     if (args[0] === "search") {
         let page: number = parseInt(args[1]);
@@ -202,27 +237,26 @@ async function handleCmd(content: string, message: Replayable) {
             searchPhrase = args.slice(1).join(" ");
         }
 
-        return await searchQuotes(message,searchPhrase,page)
+        return await searchQuotes(message, searchPhrase, page)
     }
     if (args[0] === "top") {
-        return await showTopQuotes(message,args[1] === "votes");
+        return await showTopQuotes(message, args[1] === "votes");
     }
     if (args[0] === "transfer") {
         if (!(message instanceof Message)) return;
         let prevName = message.content.split('"')[1];
         let newName = message.content.split('"')[3];
-        return await transferQuote(message,prevName,newName);
+        return await transferQuote(message, prevName, newName);
     }
     if (args[0] === "rem" || args[0] === "remove") {
         let i = parseUUID(args[1], message);
-        return await removeQuote(message,i);
+        return await removeQuote(message, i);
     }
     if (args[0] === "edit") {
-        if (!checkPerms(message, "edit")) return;
         let i = parseUUID(args[1], message);
         let msg = args.slice(2).join(" ");
 
-        return await editQuote(message,i,msg);
+        return await editQuote(message, i, msg);
     }
     if (args[0] === "help") {
         let msg = '```\n';
@@ -261,27 +295,27 @@ async function handleCmd(content: string, message: Replayable) {
         await message.reply(`dumped to ${filename}`);
     } else if (args[0] === "uuid") {
         let index = parseUUID(args[1], message);
-        return await showQuoteUUID(message,index)
+        return await showQuoteUUID(message, index)
     }
     if (args[0] === "info") {
         if (args[1] === "set") {
             let index = parseUUID(args[2], message);
             let infoContent = args.slice(3).join(" ");
-            return await setInfo(message,index,infoContent);
+            return await setInfo(message, index, infoContent);
         } else if (args[1] === "rem") {
             let index = parseUUID(args[2], message);
-            return await setInfo(message,index,"");
+            return await setInfo(message, index, "");
         } else if (args[1] === "lsnull") {
             let page: number = parseInt(args[2]);
-            return await showQuotesWithoutInfo(message,page);
+            return await showQuotesWithoutInfo(message, page);
         } else {
             let index = parseUUID(args[1], message);
-            return await showQuoteInfo(message,index);
+            return await showQuoteInfo(message, index);
         }
     }
     if (args[0] === "history") {
         let index = parseUUID(args[1], message);
-        return await showQuoteHistory(message,index)
+        return await showQuoteHistory(message, index)
     }
     if (args[0] === "file") {
         await loadServerData(message.guild.id);
@@ -356,10 +390,10 @@ async function handleCmd(content: string, message: Replayable) {
 
         if (args[2] === "set") {
             let votes = parseInt(args[3])
-            return await setQuoteVotesCount(message,i,votes);
+            return await setQuoteVotesCount(message, i, votes);
         }
 
-        return await voteQuote(message,i);
+        return await voteQuote(message, i);
     }
     if (args[0] === "backup") {
         if (!checkPerms(message, "admin")) return;
@@ -383,32 +417,4 @@ async function handleCmd(content: string, message: Replayable) {
     if (args[0] === "verify") {
         return await verifyQuotes(message);
     }
-}
-
-function TransformToUserArray(message: Replayable): Users {
-    let users: Users = {};
-    servers[message.guild.id].quotes.forEach((cytat: QuoteType) => {
-        let user = getUser(cytat);
-        if (!users[user] || !users[user].quotes) users[user] = {quotes: []};
-        users[user].quotes.push(cytat);
-    })
-    return users;
-}
-
-function parseUUID(uuid, message: Replayable) {
-    let _i = uuid;
-    servers[message.guild.id].quotes.forEach((el, i) => {
-        if (el.uuid == uuid) {
-            _i = i;
-        }
-    })
-    return parseInt(_i);
-}
-
-function getServerFolder(server_id: string) {
-    return `./servers/${server_id}/`;
-}
-
-function getServerCurrentFile(server_id: string) {
-    return getServerFolder(server_id) + "_current.json";
 }
