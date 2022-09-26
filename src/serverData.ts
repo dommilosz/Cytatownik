@@ -18,7 +18,7 @@ export let servers: Servers = {};
 export async function loadServerData(server_id: string, force: boolean = false, backup_index: number = -1) {
     try {
         if (backup_index > 0) {
-            let server = (await firebase.collection("backups").doc(server_id).collection("backups").doc(`${+new Date()}`).get()).data();
+            let server = (await firebase.collection("backups").doc(server_id).collection("backups").doc(`${backup_index}`).get()).data();
             if (!server || !server.config) {
                 servers[server_id] = {config: {permissions: {}, vote_cooldown: 86_400}, quotes: [], voted_users: {}};
                 await saveServerData(server_id);
