@@ -11,7 +11,7 @@ import {
     ChatInputCommandInteraction
 } from "discord.js";
 
-import {Replayable} from "./types";
+import {QuoteType, Replayable} from "./types";
 import admin from "firebase-admin";
 import {REST} from "@discordjs/rest";
 import {loadServerData, saveServerData, servers} from "./serverData";
@@ -114,7 +114,7 @@ client.on('messageCreate', async message => {
 
 client.on('interactionCreate', async interaction => {
     try {
-        await loadServerData(interaction.guild.id);
+        await loadServerData(interaction.guild!.id);
         if (interaction.isButton()) {
             clearTimedOutActions();
             if (await buttonAction(interaction)) {
@@ -154,26 +154,27 @@ async function buttonAction(message: Discord.ButtonInteraction): Promise<boolean
 
     if (btn_action.action) {
         if (btn_action.action == "rem-uuid") {
-            if (!message.guild.members.cache.get(message.member.user.id).permissions.has([PermissionsBitField.Flags.ManageGuild]))
-                if (btn_action.author != message.member.user.id) {
+            if (!message.guild!.members.cache.get(message.member!.user.id)?.permissions?.has([PermissionsBitField.Flags.ManageGuild]))
+                if (btn_action.author != message.member!.user.id) {
                     await message.reply(`Only author or admin can do it!`);
                     return false;
                 }
-            await saveServerData(message.guild.id, true)
+            await saveServerData(message.guild!.id, true)
             let uuid = (btn_action.data);
             let deleted_id = -1;
-            let deleted_cytat;
-            servers[message.guild.id].quotes.forEach((el, i) => {
+            // @ts-ignore
+            let deleted_cytat:QuoteType = undefined;
+            servers[message.guild!.id].quotes.forEach((el, i) => {
                 if (el.uuid == uuid) {
                     deleted_id = i;
                     deleted_cytat = el;
-                    servers[message.guild.id].quotes.splice(i, 1);
+                    servers[message.guild!.id].quotes.splice(i, 1);
                     return;
                 }
             })
-            await saveServerData(message.guild.id);
-            if (deleted_id >= 0) {
-                await message.reply(`Usunieto ${deleted_id}: ${deleted_cytat.msg}`);
+            await saveServerData(message.guild!.id);
+            if (deleted_id >= 0 && deleted_cytat !== undefined)  {
+                await message.reply(`Usunieto ${deleted_id}: ${deleted_cytat?.msg}`);
                 return true;
             } else {
                 await message.reply(`Nie znaleziono!`)
@@ -187,27 +188,27 @@ async function buttonAction(message: Discord.ButtonInteraction): Promise<boolean
         if (btn_action.action == "merge") {
             let _old = btn_action.data.old;
             let _new = btn_action.data.new;
-            if (!checkPerms(message, "admin")) return;
-            await saveServerData(message.guild.id, true)
-            servers[message.guild.id].quotes.forEach((el: any, i: number) => {
+            if (!checkPerms(message, "admin")) return false;
+            await saveServerData(message.guild!.id, true)
+            servers[message.guild!.id].quotes.forEach((el: any, i: number) => {
                 let osoba = getUser(el)
                 if (osoba === _old) {
-                    servers[message.guild.id].quotes[i].msg = servers[message.guild.id].quotes[i].msg.replace(_old, _new);
+                    servers[message.guild!.id].quotes[i].msg = servers[message.guild!.id].quotes[i].msg.replace(_old, _new);
                 }
             });
-            await saveServerData(message.guild.id);
+            await saveServerData(message.guild!.id);
             await message.reply(`Zamieniono "${_old}" na ${_new}`);
             return true;
         }
     }
 
-    await handleCmd(btn_action.cmd, message);
+    await handleCmd(btn_action.cmd??"", message);
     return true;
 }
 
 async function handleCmd(content: string, message: Replayable) {
     const args = content.replace('~', '').split(' ');
-    await loadServerData(message.guild.id);
+    await loadServerData(message.guild!.id);
 
     if (args[0] === "add" || args[0] === "add-no-similarity") {
         let no_similarity = false;
@@ -260,7 +261,7 @@ async function handleCmd(content: string, message: Replayable) {
     }
     if (args[0] === "write") {
         if (!checkPerms(message, "admin")) return;
-        await saveServerData(message.guild.id);
+        await saveServerData(message.guild!.id);
         await message.reply("Written config");
     }
     if (args[0] === "help") {
@@ -291,13 +292,13 @@ async function handleCmd(content: string, message: Replayable) {
     if (args[0] === "reload") {
         if (!checkPerms(message, "admin")) return;
 
-        await loadServerData(message.guild.id, true);
+        await loadServerData(message.guild!.id, true);
         await message.reply("Reloaded");
     }
     if (args[0] === "dump") {
         if (!checkPerms(message, "root")) return;
-        let filename = "./dump_" + message.guild.id + ".json"
-        fs.writeFileSync(filename, JSON.stringify(servers[message.guild.id]), {encoding: "utf8"});
+        let filename = "./dump_" + message.guild!.id + ".json"
+        fs.writeFileSync(filename, JSON.stringify(servers[message.guild!.id]), {encoding: "utf8"});
         await message.reply(`dumped to ${filename}`);
     } else if (args[0] === "uuid") {
         let index = parseUUID(args[1], message);
@@ -324,22 +325,22 @@ async function handleCmd(content: string, message: Replayable) {
         return await showQuoteHistory(message, index)
     }
     if (args[0] === "file") {
-        await loadServerData(message.guild.id);
-        await message.reply(`Informacje o pliku serwera ${message.guild.id}:\nIlość cytatów: ${servers[message.guild.id].quotes.length}\nAby przeładować cytaty z pliku użyj ~reload`);
+        await loadServerData(message.guild!.id);
+        await message.reply(`Informacje o pliku serwera ${message.guild!.id}:\nIlość cytatów: ${servers[message.guild!.id].quotes.length}\nAby przeładować cytaty z pliku użyj ~reload`);
     }
     if (args[0] === "config") {
         if (!checkPerms(message, "admin")) return;
         if (args[1] === "perms") {
             if (args[2] === "set") {
                 if (args[3] === "admin" || args[3] === "edit") {
-                    let role = message.guild.roles.cache.get(args[4]);
+                    let role = message.guild!.roles.cache.get(args[4]);
                     if (!role) {
                         await message.reply("Unknown role: " + args[4]);
                         return;
                     }
-                    servers[message.guild.id].config.permissions[role.id] = args[3];
+                    servers[message.guild!.id].config.permissions[role.id] = args[3];
                     await message.reply(`Added role: ${role.name} as ${args[3]}`);
-                    await saveServerData(message.guild.id);
+                    await saveServerData(message.guild!.id);
                     return;
                 } else {
                     await message.reply("Unknown permission: " + args[3]);
@@ -348,9 +349,9 @@ async function handleCmd(content: string, message: Replayable) {
 
             } else if (args[2] === "list") {
                 let msg = "```\n";
-                Object.keys(servers[message.guild.id].config.permissions).forEach(key => {
-                    let el = servers[message.guild.id].config.permissions[key];
-                    let role = message.guild.roles.cache.get(key);
+                Object.keys(servers[message.guild!.id].config.permissions).forEach(key => {
+                    let el = servers[message.guild!.id].config.permissions[key];
+                    let role = message.guild!.roles.cache.get(key);
                     if (role) {
                         msg += `${role.name}: ${el}\n`;
                     }
@@ -359,25 +360,25 @@ async function handleCmd(content: string, message: Replayable) {
                 await message.reply(msg);
                 return;
             } else if (args[2] === "remove") {
-                let role: Discord.Role = message.guild.roles.cache.get(args[3]);
-                if (!servers[message.guild.id].config.permissions[args[3]]) {
+                let role: Discord.Role|undefined = message.guild!.roles.cache.get(args[3]);
+                if (!servers[message.guild!.id].config.permissions[args[3]] || !role) {
                     await message.reply("Unknown or unset role: " + args[3]);
                     return;
                 }
-                delete servers[message.guild.id].config.permissions[role.id];
-                await message.reply(`Deleted role: ${role.name}`);
-                await saveServerData(message.guild.id);
+                delete servers[message.guild!.id].config.permissions[role?.id];
+                await message.reply(`Deleted role: ${role?.name}`);
+                await saveServerData(message.guild!.id);
                 return;
             }
         } else if (args[1] === "cooldown") {
             let cooldown = Number(args[2]);
             if (cooldown > 0) {
-                await message.reply(`changed vote cooldown from: ${servers[message.guild.id].config.vote_cooldown} to: ${cooldown}`);
-                servers[message.guild.id].config.vote_cooldown = cooldown;
-                await saveServerData(message.guild.id);
+                await message.reply(`changed vote cooldown from: ${servers[message.guild!.id].config.vote_cooldown} to: ${cooldown}`);
+                servers[message.guild!.id].config.vote_cooldown = cooldown;
+                await saveServerData(message.guild!.id);
                 return;
             } else {
-                await message.reply(`vote cooldown is: ${servers[message.guild.id].config.vote_cooldown}`);
+                await message.reply(`vote cooldown is: ${servers[message.guild!.id].config.vote_cooldown}`);
 
             }
 
@@ -409,12 +410,12 @@ async function handleCmd(content: string, message: Replayable) {
                 await message.reply(`Index nie może być < 0`)
                 return;
             }
-            await saveServerData(message.guild.id, true);
-            await loadServerData(message.guild.id, true, i)
-            await saveServerData(message.guild.id);
+            await saveServerData(message.guild!.id, true);
+            await loadServerData(message.guild!.id, true, i)
+            await saveServerData(message.guild!.id);
             await message.reply(`Przywrocono ${i}`)
         } else if (args[1] === "make") {
-            await saveServerData(message.guild.id, true);
+            await saveServerData(message.guild!.id, true);
             await message.reply(`Stworzono backup`)
         } else {
             await message.reply(`Available commands: make, revert, list`);

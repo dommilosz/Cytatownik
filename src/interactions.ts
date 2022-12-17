@@ -18,40 +18,40 @@ export async function handleCommand(interaction: ChatInputCommandInteraction){
 
     switch (interaction.commandName) {
         case "quote": {
-            let index = parseUUID(interaction.options.getNumber('index'), replayable);
+            let index = parseUUID(interaction.options.getNumber('index',true), replayable);
             return await getQuote(replayable, index);
         }
         case "add": {
-            let content = interaction.options.getString('content');
+            let content = interaction.options.getString('content',true);
             return await addQuote(replayable, content, false);
         }
         case "edit": {
-            let content = interaction.options.getString('content');
-            let index = interaction.options.getNumber('index');
+            let content = interaction.options.getString('content',true);
+            let index = interaction.options.getNumber('index',true);
             return await editQuote(replayable, index, content);
         }
         case "remove": {
-            let index = interaction.options.getNumber('index');
+            let index = interaction.options.getNumber('index',true);
             return await removeQuote(replayable, index);
         }
         case "list": {
             let page = interaction.options.getNumber('page') || 1;
-            let person = interaction.options.getString('person');
+            let person = interaction.options.getString('person',true);
             return await listQuotes(replayable, person, page);
         }
         case "info":{
             let subcommand = interaction.options.getSubcommand();
             if(subcommand === "get"){
-                let index = interaction.options.getNumber('index');
+                let index = interaction.options.getNumber('index',true);
                 return await showQuoteInfo(replayable,index)
             }
             if(subcommand === "set"){
-                let index = interaction.options.getNumber('index');
-                let info = interaction.options.getString('info');
+                let index = interaction.options.getNumber('index',true);
+                let info = interaction.options.getString('info',true);
                 return await setInfo(replayable,index,info);
             }
             if(subcommand === "remove"){
-                let index = interaction.options.getNumber('index');
+                let index = interaction.options.getNumber('index',true);
                 return await setInfo(replayable,index,"");
             }
             if(subcommand === "without"){
@@ -71,18 +71,18 @@ export async function handleCommand(interaction: ChatInputCommandInteraction){
             return;
         }
         case "vote":{
-            let index = interaction.options.getNumber('index');
+            let index = interaction.options.getNumber('index',true);
             return await voteQuote(replayable, index);
         }
         case "reload":{
             if (!checkPerms(replayable, "admin")) return;
 
-            await loadServerData(interaction.guild.id, true);
+            await loadServerData(interaction.guild!.id, true);
             return await interaction.reply("Reloaded");
         }
         case "search":{
             let page = interaction.options.getNumber('page') || 1;
-            let searchPhrase = interaction.options.getString("search_phrase");
+            let searchPhrase = interaction.options.getString("search_phrase",true);
             return await searchQuotes(replayable,searchPhrase,page);
         }
     }
@@ -94,7 +94,7 @@ export async function handleAutocomplete(interaction: AutocompleteInteraction){
             const focusedOption = interaction.options.getFocused(true);
             if (focusedOption.name === 'person') {
                 let typedPerson = normalizeStr(focusedOption.value);
-                let quotes = servers[interaction.guild.id].quotes.sort((quote1: QuoteType, quote2: QuoteType) => {
+                let quotes = servers[interaction.guild!.id].quotes.sort((quote1: QuoteType, quote2: QuoteType) => {
                     let person1 = normalizeStr(getUser(quote1));
                     let person2 = normalizeStr(getUser(quote2));
 
@@ -109,7 +109,7 @@ export async function handleAutocomplete(interaction: AutocompleteInteraction){
                     }
                     return 0;
                 })
-                let persons = [];
+                let persons: string[] = [];
                 quotes.forEach((quote: QuoteType) => {
                     if (persons.length < 25) {
                         let unnormalisedPerson = getUser(quote);

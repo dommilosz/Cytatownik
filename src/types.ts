@@ -5,7 +5,7 @@ export const QuoteMaxLength = 250;
 
 export type QuoteType = {
     votes: number;
-    info: string;
+    info: string|undefined;
     msg: string;
     original_msg: string;
     uuid: string;
@@ -44,7 +44,7 @@ export interface Users {
 }
 
 export interface BtnActions {
-    [key: number]: BtnAction
+    [key: string]: BtnAction
 }
 
 export interface Servers {

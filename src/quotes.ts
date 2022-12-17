@@ -11,7 +11,7 @@ function checkIndex(message: Replayable, i: number) {
         message.reply("Index nie moze być <0");
         return false;
     }
-    if (i > servers[message.guild.id].quotes.length - 1) {
+    if (i > servers[message.guild!.id].quotes.length - 1) {
         message.reply("Index nie moze być > ilosci cytatow");
         return false;
     }
@@ -20,7 +20,7 @@ function checkIndex(message: Replayable, i: number) {
 
 function checkExists(cytat: QuoteType, message: Replayable) {
     let exists = false
-    servers[message.guild.id].quotes.forEach(el => {
+    servers[message.guild!.id].quotes.forEach(el => {
         if (el.msg == cytat.msg) {
             exists = true;
             return;
@@ -37,7 +37,7 @@ function verifyUser(_user: string, message: Replayable): { probability: number, 
         let user: User = UserArr[key];
         if (normalized == key) {
             if (_user != user.realname) {
-                output.username = user.realname;
+                output.username = user.realname ?? "";
                 output.probability = 1;
                 return;
             }
@@ -49,7 +49,7 @@ function verifyUser(_user: string, message: Replayable): { probability: number, 
             if (_user != user.realname) {
                 let probability = checkSimilarity(normalized, key);
                 if (probability > output.probability) {
-                    output.username = user.realname;
+                    output.username = user.realname ?? "";
                     output.probability = probability;
                 }
             }
@@ -80,13 +80,12 @@ function verifyQuote(quote: QuoteType, message?: Replayable, no_similarity = fal
         return false;
     }
 
-    if (checkExists(quote, message) && !edit) {
-        if (message != undefined)
-            message.reply("Cytat już istnieje!");
+    if (checkExists(quote, message!) && !edit) {
+        message!.reply("Cytat już istnieje!");
         return false;
     }
 
-    let verify_output = verifyUser(getUser(quote), message);
+    let verify_output = verifyUser(getUser(quote), message!);
     if (!no_similarity) {
         if (verify_output.probability > 0.9) {
             let fix_msg = quote.msg.replace(` ~ ${getUser(quote)}`, ` ~ ${verify_output.username}`);
@@ -120,7 +119,7 @@ function verifyQuote(quote: QuoteType, message?: Replayable, no_similarity = fal
 
 function TransformToUserArrayNormalized(message: Replayable): Users {
     let users: Users = {};
-    servers[message.guild.id].quotes.forEach((cytat: QuoteType) => {
+    servers[message.guild!.id].quotes.forEach((cytat: QuoteType) => {
         let _user = getUser(cytat);
         let user = normalizeStr(_user);
         if (!users[user] || !users[user].quotes) users[user] = {quotes: []};
@@ -131,14 +130,12 @@ function TransformToUserArrayNormalized(message: Replayable): Users {
 }
 
 
-
-
-export async function getQuote(message:Replayable,index?:number){
-    if(index === undefined || isNaN(index) || index >= servers[message.guild.id].quotes.length || index < 0){
-        index = getRandomInt(0, servers[message.guild.id].quotes.length - 1);
+export async function getQuote(message: Replayable, index?: number) {
+    if (index === undefined || isNaN(index) || index >= servers[message.guild!.id].quotes.length || index < 0) {
+        index = getRandomInt(0, servers[message.guild!.id].quotes.length - 1);
     }
 
-    let quote = servers[message.guild.id].quotes[index];
+    let quote = servers[message.guild!.id].quotes[index];
     const row = new ActionRowBuilder()
         .addComponents(CreateCmdButton("~q", "Następny losowy", ButtonStyle.Success))
         .addComponents(CreateCmdButton("~info " + quote.uuid, "Info"))
@@ -168,14 +165,14 @@ export function showQuotes(message: Replayable, quoteArr: QuoteType[], page: num
         }
         if (!lista[currPage]) lista[currPage] = "";
         if (currPage == page - 1) count++;
-        lista[currPage] += (`${el.info ? "+" : "-"} ${servers[message.guild.id].quotes.indexOf(el)}: ${el.msg}\n`).replace("$PWrzesien;", miesiace[new Date().getMonth()])
+        lista[currPage] += (`${el.info ? "+" : "-"} ${servers[message.guild!.id].quotes.indexOf(el)}: ${el.msg}\n`).replace("$PWrzesien;", miesiace[new Date().getMonth()])
     })
 
     let hasNextPage = lista.length > page;
 
     msg += lista[page - 1];
 
-    msg = `\`\`\`diff\nPage ${page}/${lista.length} - ${count} z ${servers[message.guild.id].quotes.length} cytatów. ${txt}\n` + msg
+    msg = `\`\`\`diff\nPage ${page}/${lista.length} - ${count} z ${servers[message.guild!.id].quotes.length} cytatów. ${txt}\n` + msg
 
     msg += "\n"
     msg += `Length: ${msg.length}\n`
@@ -205,41 +202,41 @@ export function showQuotes(message: Replayable, quoteArr: QuoteType[], page: num
 
 }
 
-export async function removeQuote(message:Replayable,index:number){
+export async function removeQuote(message: Replayable, index: number) {
     if (!checkPerms(message, "admin")) return;
     if (!checkIndex(message, index)) return;
-    let msg = servers[message.guild.id].quotes[index].msg;
-    await saveServerData(message.guild.id, true)
-    servers[message.guild.id].quotes.splice(index, 1);
-    await saveServerData(message.guild.id);
+    let msg = servers[message.guild!.id].quotes[index].msg;
+    await saveServerData(message.guild!.id, true)
+    servers[message.guild!.id].quotes.splice(index, 1);
+    await saveServerData(message.guild!.id);
     await message.reply(`Usunieto ${index}: ${msg}`)
 }
 
-export async function transferQuote(message:Replayable,prevName:string,newName:string){
+export async function transferQuote(message: Replayable, prevName: string, newName: string) {
     if (!checkPerms(message, "admin")) return;
-    await saveServerData(message.guild.id, true)
+    await saveServerData(message.guild!.id, true)
     if (!prevName || !newName) {
         await message.reply('Format komendy: ~transfer "name" "newname"');
         return;
     }
-    servers[message.guild.id].quotes.forEach((el: any, i: number) => {
+    servers[message.guild!.id].quotes.forEach((el: any, i: number) => {
         let osoba = getUser(el)
         if (osoba === prevName) {
-            servers[message.guild.id].quotes[i].msg = servers[message.guild.id].quotes[i].msg.replace(prevName, newName);
+            servers[message.guild!.id].quotes[i].msg = servers[message.guild!.id].quotes[i].msg.replace(prevName, newName);
         }
     });
-    await saveServerData(message.guild.id);
+    await saveServerData(message.guild!.id);
     await message.reply(`Zamieniono "${prevName}" na ${newName}`);
     return;
 }
 
-export async function listQuotes(message:Replayable,user:string,page:number){
+export async function listQuotes(message: Replayable, user: string, page: number) {
     let quoteArr: any = [];
     if (!user) {
-        quoteArr = servers[message.guild.id].quotes;
+        quoteArr = servers[message.guild!.id].quotes;
         showQuotes(message, quoteArr, page, "");
     } else {
-        servers[message.guild.id].quotes.forEach((el: QuoteType) => {
+        servers[message.guild!.id].quotes.forEach((el: QuoteType) => {
             if (getUser(el) === user) {
                 quoteArr.push(el);
             }
@@ -248,43 +245,43 @@ export async function listQuotes(message:Replayable,user:string,page:number){
     }
 }
 
-export async function addQuote(message:Replayable,content:string,no_similarity:boolean){
-    let quote = {
+export async function addQuote(message: Replayable, content: string, no_similarity: boolean) {
+    let quote:QuoteType = {
         msg: content,
         original_msg: content,
         info: undefined,
         votes: 0,
         uuid: createUUID(),
-        history: {created: +new Date(), created_by: message.member.user.id, edits: []}
+        history: {created: +new Date(), created_by: message!.member!.user.id, edits: []}
     };
 
     if (!verifyQuote(quote, message, no_similarity)) return;
 
-    servers[message.guild.id].quotes.push(quote);
-    await saveServerData(message.guild.id);
+    servers[message.guild!.id].quotes.push(quote);
+    await saveServerData(message.guild!.id);
 
     const row = new Discord.ActionRowBuilder().addComponents(CreateActionButton({
         action: "rem-uuid",
-        author: message.member.user.id,
+        author: message.member!.user.id,
         data: quote.uuid,
     }, "Usuń (w celu poprawy błędu)", ButtonStyle.Danger));
 
     // @ts-ignore
     await message.reply({
-        content: `Dodano cytat ${servers[message.guild.id].quotes.length - 1}: \n${quote.msg}`,
+        content: `Dodano cytat ${servers[message.guild!.id].quotes.length - 1}: \n${quote.msg}`,
         // @ts-ignore
         components: [row]
     });
 }
 
-export async function searchQuotes(message:Replayable,searchPhrase:string,page:number){
+export async function searchQuotes(message: Replayable, searchPhrase: string, page: number) {
     if (!searchPhrase) {
         await message.reply("Podaj słowo szukane");
         return;
     }
 
     let quoteArr: any = [];
-    servers[message.guild.id].quotes.forEach((el: { msg: any; }) => {
+    servers[message.guild!.id].quotes.forEach((el: { msg: any; }) => {
         if (normalizeStr(el.msg)
             .replace("$PWrzesien;", miesiace[new Date().getMonth()]).includes(normalizeStr(searchPhrase))) {
             quoteArr.push(el);
@@ -293,21 +290,21 @@ export async function searchQuotes(message:Replayable,searchPhrase:string,page:n
     showQuotes(message, quoteArr, page, `Cytaty zawierające: ${searchPhrase}`);
 }
 
-export async function showTopQuotes(message:Replayable,topVotes:boolean){
+export async function showTopQuotes(message: Replayable, topVotes: boolean) {
     let msg = "```\n";
 
     let osoby: any = {};
     let osobySorted: any = [];
 
     if (topVotes) {
-        servers[message.guild.id].quotes.forEach((el: any) => {
+        servers[message.guild!.id].quotes.forEach((el: any) => {
             if (!el.votes) {
                 el.votes = 0;
             }
             osoby[el.msg] = el.votes;
         })
     } else {
-        servers[message.guild.id].quotes.forEach((el: any) => {
+        servers[message.guild!.id].quotes.forEach((el: any) => {
             let osoba = getUser(el)
             if (!osoby[osoba]) {
                 osoby[osoba] = 0;
@@ -345,63 +342,63 @@ export async function showTopQuotes(message:Replayable,topVotes:boolean){
     await message.reply(msg);
 }
 
-export async function editQuote(message:Replayable,index:number,newContent:string){
+export async function editQuote(message: Replayable, index: number, newContent: string) {
     if (!checkPerms(message, "edit")) return;
     if (!checkIndex(message, index)) return;
 
-    let cytat = servers[message.guild.id].quotes[index];
+    let cytat = servers[message.guild!.id].quotes[index];
     cytat.msg = newContent;
 
     if (!verifyQuote(cytat, message, false, true)) return;
-    let msg2 = servers[message.guild.id].quotes[index].msg;
-    await saveServerData(message.guild.id, true)
-    servers[message.guild.id].quotes[index] = cytat;
+    let msg2 = servers[message.guild!.id].quotes[index].msg;
+    await saveServerData(message.guild!.id, true)
+    servers[message.guild!.id].quotes[index] = cytat;
 
-    if (!servers[message.guild.id].quotes[index].history) servers[message.guild.id].quotes[index].history = {
+    if (!servers[message.guild!.id].quotes[index].history) servers[message.guild!.id].quotes[index].history = {
         created: +new Date(),
-        created_by: message.member.user.id,
+        created_by: message.member!.user.id,
         edits: []
     };
-    if (!servers[message.guild.id].quotes[index].history.edits) servers[message.guild.id].quotes[index].history.edits = [];
-    servers[message.guild.id].quotes[index].history.edits.push({
+    if (!servers[message.guild!.id].quotes[index].history.edits) servers[message.guild!.id].quotes[index].history.edits = [];
+    servers[message.guild!.id].quotes[index].history.edits.push({
         change: newContent,
-        by: message.member.user.id,
+        by: message.member!.user.id,
         date: +new Date(),
         type: "msg"
     });
-    await saveServerData(message.guild.id);
+    await saveServerData(message.guild!.id);
 
     await message.reply(`Edytowano ${index}: ${msg2} na ${cytat.msg}`);
 }
 
-export async function setInfo(message:Replayable,index:number,infoContent:string){
+export async function setInfo(message: Replayable, index: number, infoContent: string) {
     if (!checkIndex(message, index)) return;
-    await saveServerData(message.guild.id, true)
-    if (!servers[message.guild.id].quotes[index].history) servers[message.guild.id].quotes[index].history = {
+    await saveServerData(message.guild!.id, true)
+    if (!servers[message.guild!.id].quotes[index].history) servers[message.guild!.id].quotes[index].history = {
         created: +new Date(),
-        created_by: message.member.user.id,
+        created_by: message.member!.user.id,
         edits: []
     };
-    if (!servers[message.guild.id].quotes[index].history.edits) servers[message.guild.id].quotes[index].history.edits = [];
+    if (!servers[message.guild!.id].quotes[index].history.edits) servers[message.guild!.id].quotes[index].history.edits = [];
 
-    servers[message.guild.id].quotes[index].history.edits.push({
+    servers[message.guild!.id].quotes[index].history.edits.push({
         change: infoContent,
-        by: message.member.user.id,
+        by: message.member!.user.id,
         date: +new Date(),
         type: "info"
     });
-    servers[message.guild.id].quotes[index].info = infoContent;
-    await saveServerData(message.guild.id);
-    await message.reply(`Ustawiono informacje o: ${servers[message.guild.id].quotes[index].msg}\n${servers[message.guild.id].quotes[index].info}`)
+    servers[message.guild!.id].quotes[index].info = infoContent;
+    await saveServerData(message.guild!.id);
+    await message.reply(`Ustawiono informacje o: ${servers[message.guild!.id].quotes[index].msg}\n${servers[message.guild!.id].quotes[index].info}`)
 }
 
-export async function showQuotesWithoutInfo(message:Replayable,page:number){
+export async function showQuotesWithoutInfo(message: Replayable, page: number) {
     if (!page) {
         page = 1;
     }
 
     let quoteArr: any = [];
-    servers[message.guild.id].quotes.forEach((el: any) => {
+    servers[message.guild!.id].quotes.forEach((el: any) => {
         if (!el.info) {
             quoteArr.push(el);
         }
@@ -409,36 +406,36 @@ export async function showQuotesWithoutInfo(message:Replayable,page:number){
     showQuotes(message, quoteArr, page, `Cytaty bez dodanych informacji`);
 }
 
-export async function showQuoteInfo(message:Replayable,index:number){
+export async function showQuoteInfo(message: Replayable, index: number) {
     if (!checkIndex(message, index)) return;
 
-    await message.reply(`Informacje o: ${servers[message.guild.id].quotes[index].msg}\n${servers[message.guild.id].quotes[index].info}`)
+    await message.reply(`Informacje o: ${servers[message.guild!.id].quotes[index].msg}\n${servers[message.guild!.id].quotes[index].info}`)
 
 }
 
-export async function showQuoteUUID(message:Replayable,index:number){
+export async function showQuoteUUID(message: Replayable, index: number) {
     if (!checkIndex(message, index)) return;
-    await message.reply(`UUID cytatu ${index}: ${servers[message.guild.id].quotes[index].uuid}`)
+    await message.reply(`UUID cytatu ${index}: ${servers[message.guild!.id].quotes[index].uuid}`)
 }
 
-export async function showQuoteHistory(message:Replayable,index:number){
+export async function showQuoteHistory(message: Replayable, index: number) {
     if (!checkIndex(message, index)) return;
 
     let txt = "";
 
-    if (!servers[message.guild.id].quotes[index].history) {
+    if (!servers[message.guild!.id].quotes[index].history) {
         await message.reply(`Brak historii`)
         return;
     }
-    txt += `CREATED BY: ${servers[message.guild.id].quotes[index].history.created_by}\nWHEN: ${new Date(servers[message.guild.id].quotes[index].history.created).toLocaleString("PL")}\n`;
-    servers[message.guild.id].quotes[index].history.edits.forEach(el => {
+    txt += `CREATED BY: ${servers[message.guild!.id].quotes[index].history.created_by}\nWHEN: ${new Date(servers[message.guild!.id].quotes[index].history.created).toLocaleString("PL")}\n`;
+    servers[message.guild!.id].quotes[index].history.edits.forEach(el => {
         txt += `TYPE: ${el.type} BY: <@${el.by}> CHANGE: ${el.change} WHEN: ${new Date(el.date).toLocaleString("PL")}\n`
     })
 
-    await message.reply(`Historia cytatu: ${servers[message.guild.id].quotes[index].msg}\n\`\`\`\n${txt}\n\`\`\``)
+    await message.reply(`Historia cytatu: ${servers[message.guild!.id].quotes[index].msg}\n\`\`\`\n${txt}\n\`\`\``)
 }
 
-export async function setQuoteVotesCount(message:Replayable,index:number,count:number){
+export async function setQuoteVotesCount(message: Replayable, index: number, count: number) {
     if (!checkIndex(message, index)) return;
     if (!checkPerms(message, "admin")) return;
 
@@ -447,18 +444,18 @@ export async function setQuoteVotesCount(message:Replayable,index:number,count:n
         return;
     }
 
-    servers[message.guild.id].quotes[index].votes = count;
-    await saveServerData(message.guild.id);
-    await message.reply(`Ustawiono ilość głosów: ${servers[message.guild.id].quotes[index].msg}\nIlość głosów: ${servers[message.guild.id].quotes[index].votes}`)
+    servers[message.guild!.id].quotes[index].votes = count;
+    await saveServerData(message.guild!.id);
+    await message.reply(`Ustawiono ilość głosów: ${servers[message.guild!.id].quotes[index].msg}\nIlość głosów: ${servers[message.guild!.id].quotes[index].votes}`)
     return;
 }
 
-export async function voteQuote(message:Replayable,index:number){
+export async function voteQuote(message: Replayable, index: number) {
     let ts: number = +new Date();
 
-    if (servers[message.guild.id].voted_users[message.member.user.id.toString()] && servers[message.guild.id].voted_users[message.member.user.id.toString()].ts) {
-        if (((servers[message.guild.id].voted_users[message.member.user.id.toString()].ts) + (servers[message.guild.id].config.vote_cooldown * 1000)) > ts) {
-            let timeLeft = servers[message.guild.id].voted_users[message.member.user.id.toString()].ts + (servers[message.guild.id].config.vote_cooldown * 1000) - ts;
+    if (servers[message.guild!.id].voted_users[message.member!.user.id.toString()] && servers[message.guild!.id].voted_users[message.member!.user.id.toString()].ts) {
+        if (((servers[message.guild!.id].voted_users[message.member!.user.id.toString()].ts) + (servers[message.guild!.id].config.vote_cooldown * 1000)) > ts) {
+            let timeLeft = servers[message.guild!.id].voted_users[message.member!.user.id.toString()].ts + (servers[message.guild!.id].config.vote_cooldown * 1000) - ts;
             let minutes = Math.floor(timeLeft / 1000 / 60);
             let hours = Math.floor(minutes / 60);
             await message.reply(`You are still on cooldown: ${hours}h ${minutes % 60}m`)
@@ -466,21 +463,21 @@ export async function voteQuote(message:Replayable,index:number){
         }
     }
 
-    servers[message.guild.id].voted_users[message.member.user.id.toString()] = {ts: ts}
+    servers[message.guild!.id].voted_users[message.member!.user.id.toString()] = {ts: ts}
 
-    if (!servers[message.guild.id].quotes[index].votes) servers[message.guild.id].quotes[index].votes = 0;
-    servers[message.guild.id].quotes[index].votes += 1;
-    await saveServerData(message.guild.id);
-    await message.reply(`Zagłosowano na: ${servers[message.guild.id].quotes[index].msg}\nIlość głosów: ${servers[message.guild.id].quotes[index].votes}`)
+    if (!servers[message.guild!.id].quotes[index].votes) servers[message.guild!.id].quotes[index].votes = 0;
+    servers[message.guild!.id].quotes[index].votes += 1;
+    await saveServerData(message.guild!.id);
+    await message.reply(`Zagłosowano na: ${servers[message.guild!.id].quotes[index].msg}\nIlość głosów: ${servers[message.guild!.id].quotes[index].votes}`)
     return;
 }
 
-export async function verifyQuotes(message:Replayable){
+export async function verifyQuotes(message: Replayable) {
     let msg = "```\n";
-    let handled = [];
-    let buttons = [];
+    let handled: string[] = [];
+    let buttons: { old: string; new: string; }[] = [];
     if (!checkPerms(message, "admin")) return;
-    servers[message.guild.id].quotes.forEach(el => {
+    servers[message.guild!.id].quotes.forEach(el => {
         let Corrected = verifyUser(getUser(el), message);
         if (Corrected.probability >= 0.6) {
             let actionsig = [getUser(el), Corrected.username];
@@ -496,7 +493,7 @@ export async function verifyQuotes(message:Replayable){
         }
     })
     msg += "```\n"
-    let rows = [];
+    let rows: ActionRowBuilder<Discord.AnyComponentBuilder>[] = [];
     buttons.forEach(el => {
         const row = new ActionRowBuilder()
             .addComponents(CreateActionButton({
@@ -513,11 +510,13 @@ export async function verifyQuotes(message:Replayable){
     if (rows.length > 0) {
         await message.reply({
             content: msg,
+            // @ts-ignore
             components: rows
         });
     } else {
         await message.reply({
             content: msg,
+            // @ts-ignore
             components: rows
         });
     }

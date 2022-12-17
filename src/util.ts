@@ -34,7 +34,7 @@ export function getFilesizeInBytes(filename: fs.PathLike) {
     return stats.size;
 }
 
-export function checkSimilarity(a, b){
+export function checkSimilarity(a:string, b:string){
     return stringSimilarity.compareTwoStrings(a, b);
 }
 
@@ -45,14 +45,14 @@ export function createUUID(){
 
 export function checkPerms(message: Replayable, perms: "admin" | "edit" | "root") {
     if (perms === "root") {
-        return Number(message.member.user.id) == 410416517860032523;
+        return Number(message.member!.user.id) == 410416517860032523;
     }
     let canDo = false;
-    if (message.guild.members.cache.get(message.member.user.id).permissions.has([PermissionsBitField.Flags.ManageGuild])) return true;
+    if (message.guild!.members.cache.get(message.member!.user.id)?.permissions?.has([PermissionsBitField.Flags.ManageGuild])) return true;
 
-    if (!servers[message.guild.id].config.permissions) return false;
-    message.guild.members.cache.get(message.member.user.id).roles.cache.forEach(role => {
-        if (servers[message.guild.id].config.permissions[role.id] === perms || servers[message.guild.id].config.permissions[role.id] === "admin") {
+    if (!servers[message.guild!.id].config.permissions) return false;
+    message.guild!.members.cache.get(message.member!.user.id)?.roles.cache.forEach(role => {
+        if (servers[message.guild!.id].config.permissions[role.id] === perms || servers[message.guild!.id].config.permissions[role.id] === "admin") {
             canDo = true;
             return;
         }
@@ -67,12 +67,12 @@ export function getUser(cytat: QuoteType) {
     return cytat.msg.split('~')[cytat.msg.split('~').length - 1].trim();
 }
 
-export function parseUUID(uuid, message: Replayable) {
+export function parseUUID(uuid: string | number, message: Replayable) {
     let _i = uuid;
-    servers[message.guild.id].quotes.forEach((el, i) => {
+    servers[message.guild!.id].quotes.forEach((el, i) => {
         if (el.uuid == uuid) {
             _i = i;
         }
     })
-    return parseInt(_i);
+    return parseInt(String(_i));
 }

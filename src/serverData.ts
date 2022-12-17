@@ -30,7 +30,7 @@ export async function loadServerData(server_id: string, force: boolean = false, 
             serverData = (await firebase.collection("servers").doc(server_id).get()).data();
         }
 
-        serverData = Buffer.from(serverData.data, "base64");
+        serverData = Buffer.from(serverData?.data, "base64");
         serverData = zlib.gunzipSync(serverData).toString();
         let server = JSON.parse(serverData);
 
