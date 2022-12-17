@@ -42,16 +42,27 @@ export async function loadServerData(server_id: string, force: boolean = false, 
             servers[server_id] = server;
         }
 
-        servers[server_id].quotes.forEach(el => {
+        servers[server_id].quotes.forEach((el,i) => {
             if (!el.uuid) {
                 el.uuid = createUUID();
             }
+            if(!el.history){
+                el.history = {created:i,created_by:"unknown",edits:[]}
+            }
         })
-
-        return servers[server_id];
     } catch {
         servers[server_id] = {config: {permissions: {}, vote_cooldown: 86_400}, quotes: [], voted_users: {}};
     }
+    servers[server_id].quotes = servers[server_id].quotes.sort((q1,q2)=>{
+        if (q1.history.created < q2.history.created) {
+            return -1;
+        }
+        if (q1.history.created > q2.history.created) {
+            return 1;
+        }
+        return 0;
+    })
+    return servers[server_id];
 }
 
 export async function saveServerData(server_id: string, _backup: boolean = false) {
