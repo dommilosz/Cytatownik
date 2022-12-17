@@ -3,6 +3,7 @@ import {Servers} from "./types";
 import {getFirestore} from "firebase-admin/firestore";
 import {initializeApp} from "firebase-admin/app";
 import admin from "firebase-admin";
+import * as zlib from "zlib";
 
 let serviceAccount = require("../firebase_secret.json");
 let defaultApp = initializeApp({
@@ -17,43 +18,42 @@ export let servers: Servers = {};
 
 export async function loadServerData(server_id: string, force: boolean = false, backup_index: number = -1) {
     try {
+        let serverData;
         if (backup_index > 0) {
-            let server = (await firebase.collection("backups").doc(server_id).collection("backups").doc(`${backup_index}`).get()).data();
-            if (!server || !server.config) {
-                servers[server_id] = {config: {permissions: {}, vote_cooldown: 86_400}, quotes: [], voted_users: {}};
-                await saveServerData(server_id);
-                return;
-            }
-            // @ts-ignore
-            servers[server_id] = server;
+            serverData = (await firebase.collection("backups").doc(server_id).collection("backups").doc(`${backup_index}`).get()).data();
         } else {
             if (!force) {
                 if (servers[server_id]) {
                     return servers[server_id];
                 }
             }
-            let server = (await firebase.collection("servers").doc(server_id).get()).data();
-            if (!server || !server.config) {
-                servers[server_id] = {config: {permissions: {}, vote_cooldown: 86_400}, quotes: [], voted_users: {}};
-                await saveServerData(server_id);
-                return;
-            }
-            // @ts-ignore
-            servers[server_id] = server;
+            serverData = (await firebase.collection("servers").doc(server_id).get()).data();
         }
 
-        servers[server_id].quotes.forEach((el,i) => {
+        serverData = Buffer.from(serverData.data, "base64");
+        serverData = zlib.gunzipSync(serverData).toString();
+        let server = JSON.parse(serverData);
+
+        if (!server || !server.config) {
+            servers[server_id] = {config: {permissions: {}, vote_cooldown: 86_400}, quotes: [], voted_users: {}};
+            await saveServerData(server_id);
+            return;
+        }
+        // @ts-ignore
+        servers[server_id] = server;
+
+        servers[server_id].quotes.forEach((el, i) => {
             if (!el.uuid) {
                 el.uuid = createUUID();
             }
-            if(!el.history){
-                el.history = {created:i,created_by:"unknown",edits:[]}
+            if (!el.history) {
+                el.history = {created: i, created_by: "unknown", edits: []}
             }
         })
     } catch {
         servers[server_id] = {config: {permissions: {}, vote_cooldown: 86_400}, quotes: [], voted_users: {}};
     }
-    servers[server_id].quotes = servers[server_id].quotes.sort((q1,q2)=>{
+    servers[server_id].quotes = servers[server_id].quotes.sort((q1, q2) => {
         if (q1.history.created < q2.history.created) {
             return -1;
         }
@@ -66,9 +66,13 @@ export async function loadServerData(server_id: string, force: boolean = false, 
 }
 
 export async function saveServerData(server_id: string, _backup: boolean = false) {
+    let serverData = servers[server_id];
+    let buf = zlib.gzipSync(Buffer.from(JSON.stringify(serverData)));
+    let base64 = buf.toString("base64")
+
     if (_backup) {
-        await firebase.collection("backups").doc(server_id).collection("backups").doc(`${+new Date()}`).set(servers[server_id])
+        await firebase.collection("backups").doc(server_id).collection("backups").doc(`${+new Date()}`).set({data: base64})
     } else {
-        await firebase.collection("servers").doc(server_id).set(servers[server_id])
+        await firebase.collection("servers").doc(server_id).set({data: base64})
     }
 }

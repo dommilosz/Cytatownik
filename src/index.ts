@@ -258,6 +258,11 @@ async function handleCmd(content: string, message: Replayable) {
 
         return await editQuote(message, i, msg);
     }
+    if (args[0] === "write") {
+        if (!checkPerms(message, "admin")) return;
+        await saveServerData(message.guild.id);
+        await message.reply("Written config");
+    }
     if (args[0] === "help") {
         let msg = '```\n';
         msg += "~q[uote]                     - losowy cytat\n"
@@ -277,6 +282,7 @@ async function handleCmd(content: string, message: Replayable) {
         msg += "~config                      - konfiguracja serwerowa\n"
         msg += "~history <index>             - historia cytatu\n"
         msg += "~reload                      - przeładuj cytaty z pliku\n"
+        msg += "~write                       - zapisz cytaty\n"
         msg += "~help                        - to info\n"
         msg += "```"
 
