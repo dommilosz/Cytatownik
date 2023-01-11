@@ -37,6 +37,7 @@ export type Server = {
     }
 
     voted_users: { [key: string]: { ts: number } };
+    saveTimestamp?:number
 }
 
 export interface Users {

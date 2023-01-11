@@ -67,7 +67,7 @@ export function getUser(cytat: QuoteType) {
     return cytat.msg.split('~')[cytat.msg.split('~').length - 1].trim();
 }
 
-export function parseUUID(uuid: string | number, message: Replayable) {
+export function parseUUID(uuid: string | number | null | undefined, message: Replayable) {
     let _i = uuid;
     servers[message.guild!.id].quotes.forEach((el, i) => {
         if (el.uuid == uuid) {

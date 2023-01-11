@@ -18,7 +18,7 @@ export async function handleCommand(interaction: ChatInputCommandInteraction){
 
     switch (interaction.commandName) {
         case "quote": {
-            let index = parseUUID(interaction.options.getNumber('index',true), replayable);
+            let index = parseUUID(interaction.options.getNumber('index'), replayable);
             return await getQuote(replayable, index);
         }
         case "add": {

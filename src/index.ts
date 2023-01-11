@@ -14,7 +14,7 @@ import {
 import {QuoteType, Replayable} from "./types";
 import admin from "firebase-admin";
 import {REST} from "@discordjs/rest";
-import {loadServerData, saveServerData, servers} from "./serverData";
+import {listBackups, loadServerData, saveServerData, servers} from "./serverData";
 import {button_actions, clearTimedOutActions} from "./buttons";
 import {
     addQuote,
@@ -415,9 +415,14 @@ async function handleCmd(content: string, message: Replayable) {
             await saveServerData(message.guild!.id);
             await message.reply(`Przywrocono ${i}`)
         } else if (args[1] === "make") {
-            await saveServerData(message.guild!.id, true);
-            await message.reply(`Stworzono backup`)
-        } else {
+            let backupName = await saveServerData(message.guild!.id, true);
+            await message.reply(`Backup created: ${backupName}`)
+        } else if (args[1] === "list") {
+            let backups = (await listBackups(message.guild!.id, 10)).map((backup)=>{
+                return `${backup.saveTimestamp}: ${backup.quotes.length} quotes`
+            });
+            await message.reply(`Backups available: \`\`\`${backups.join("\n")}\`\`\``)
+        }else {
             await message.reply(`Available commands: make, revert, list`);
         }
     }

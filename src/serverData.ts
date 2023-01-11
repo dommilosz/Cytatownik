@@ -1,9 +1,10 @@
 import {createUUID} from "./util";
-import {Servers} from "./types";
+import {Server, Servers} from "./types";
 import {getFirestore} from "firebase-admin/firestore";
 import {initializeApp} from "firebase-admin/app";
-import admin from "firebase-admin";
+import admin, {firestore} from "firebase-admin";
 import * as zlib from "zlib";
+import FieldPath = firestore.FieldPath;
 
 let serviceAccount = require("../firebase_secret.json");
 let defaultApp = initializeApp({
@@ -67,12 +68,24 @@ export async function loadServerData(server_id: string, force: boolean = false, 
 
 export async function saveServerData(server_id: string, _backup: boolean = false) {
     let serverData = servers[server_id];
+    serverData.saveTimestamp = +new Date();
     let buf = zlib.gzipSync(Buffer.from(JSON.stringify(serverData)));
-    let base64 = buf.toString("base64")
+    let base64 = buf.toString("base64");
 
     if (_backup) {
-        await firebase.collection("backups").doc(server_id).collection("backups").doc(`${+new Date()}`).set({data: base64})
+        await firebase.collection("backups").doc(server_id).collection("backups").doc(`${serverData.saveTimestamp}`).set({data: base64, ts:serverData.saveTimestamp})
+        return serverData.saveTimestamp;
     } else {
         await firebase.collection("servers").doc(server_id).set({data: base64})
     }
+}
+
+export async function listBackups(server_id: string, count:number){
+    let backupSnapshot = await firebase.collection("backups").doc(server_id).collection("backups").orderBy("ts", "desc").limit(count).get();
+    return backupSnapshot.docs.map(backup => {
+        let gzipData: string = backup.data().data;
+        let data: Server = JSON.parse(zlib.gunzipSync(Buffer.from(gzipData, "base64")).toString());
+        if(!data.saveTimestamp)data.saveTimestamp = Number(backup.id);
+        return data;
+    });
 }
