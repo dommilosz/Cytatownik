@@ -1,13 +1,16 @@
+import fs from "fs";
+import path from "path";
 import {createUUID} from "./util";
 import {Server, Servers} from "./types";
 import {getFirestore} from "firebase-admin/firestore";
-import {initializeApp} from "firebase-admin/app";
-import admin from "firebase-admin";
+import {initializeApp, cert} from "firebase-admin/app";
 import * as zlib from "zlib";
 
-let serviceAccount = require("../firebase_secret.json");
-let defaultApp = initializeApp({
-    credential: admin.credential.cert(serviceAccount),
+const serviceAccount = JSON.parse(
+    fs.readFileSync(path.resolve(process.cwd(), "firebase_secret.json"), "utf8")
+);
+const defaultApp = initializeApp({
+    credential: cert(serviceAccount),
 });
 const firebase = getFirestore(defaultApp);
 firebase.settings({

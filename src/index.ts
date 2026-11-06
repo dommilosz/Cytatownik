@@ -12,7 +12,6 @@ import {
 } from "discord.js";
 
 import {QuoteType, Replayable} from "./types";
-import admin from "firebase-admin";
 import {REST} from "@discordjs/rest";
 import {listBackups, loadServerData, saveServerData, servers} from "./serverData";
 import {button_actions, clearTimedOutActions} from "./buttons";
