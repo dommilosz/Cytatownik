@@ -2,6 +2,7 @@
 /servers/
 /.idea/
 /firebase_secret.json
+/firebase-export.json
 /config.json
 /cytaty.json
 /cytaty2.json

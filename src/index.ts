@@ -35,7 +35,7 @@ export const miesiace = ["Pani Styczeń", "Pani Luteń", "Pani Marzeń", "Pani K
 
 const client = new Discord.Client({intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]});
 
-let config: { token: string, clientId:string } = {token: "",clientId:""}
+let config: { token: string; clientId: string; supabaseUrl?: string; supabaseKey?: string } = {token: "", clientId: ""}
 
 try {
     config = JSON.parse(fs.readFileSync('./config.json', 'utf8'))

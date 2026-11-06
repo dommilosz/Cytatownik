@@ -1,96 +1,139 @@
 import fs from "fs";
 import path from "path";
+import {createClient} from "@supabase/supabase-js";
 import {createUUID} from "./util";
 import {Server, Servers} from "./types";
-import {getFirestore} from "firebase-admin/firestore";
-import {initializeApp, cert} from "firebase-admin/app";
-import * as zlib from "zlib";
 
-const serviceAccount = JSON.parse(
-    fs.readFileSync(path.resolve(process.cwd(), "firebase_secret.json"), "utf8")
-);
-const defaultApp = initializeApp({
-    credential: cert(serviceAccount),
+type AppConfig = {
+    token: string;
+    clientId: string;
+    supabaseUrl: string;
+    supabaseKey: string;
+};
+
+const config = JSON.parse(
+    fs.readFileSync(path.resolve(process.cwd(), "config.json"), "utf8")
+) as AppConfig;
+
+const supabase = createClient(config.supabaseUrl, config.supabaseKey, {
+    db: {schema: "public_cytatownik"},
+    auth: {persistSession: false, autoRefreshToken: false},
 });
-const firebase = getFirestore(defaultApp);
-firebase.settings({
-    ignoreUndefinedProperties: true,
-});
+
 export let servers: Servers = {};
 
+function emptyServer(): Server {
+    return {config: {permissions: {}, vote_cooldown: 86_400}, quotes: [], voted_users: {}};
+}
+
+function hydrateServer(server_id: string, server: Server) {
+    if (!server?.config) {
+        servers[server_id] = emptyServer();
+        return;
+    }
+
+    servers[server_id] = server;
+    servers[server_id].quotes.forEach((el, i) => {
+        if (!el.uuid) {
+            el.uuid = createUUID();
+        }
+        if (!el.history) {
+            el.history = {created: i, created_by: "unknown", edits: []};
+        }
+    });
+
+    servers[server_id].quotes = servers[server_id].quotes.sort((q1, q2) => {
+        if (q1.history.created < q2.history.created) return -1;
+        if (q1.history.created > q2.history.created) return 1;
+        return 0;
+    });
+}
 
 export async function loadServerData(server_id: string, force: boolean = false, backup_index: number = -1) {
     try {
-        let serverData;
         if (backup_index > 0) {
-            serverData = (await firebase.collection("backups").doc(server_id).collection("backups").doc(`${backup_index}`).get()).data();
-        } else {
-            if (!force) {
-                if (servers[server_id]) {
-                    return servers[server_id];
-                }
+            const {data, error} = await supabase
+                .from("backups")
+                .select("data, ts")
+                .eq("server_id", server_id)
+                .eq("ts", backup_index)
+                .maybeSingle();
+            if (error) throw error;
+            if (!data?.data) {
+                servers[server_id] = emptyServer();
+                return servers[server_id];
             }
-            serverData = (await firebase.collection("servers").doc(server_id).get()).data();
+            hydrateServer(server_id, data.data as Server);
+            if (!servers[server_id].saveTimestamp) {
+                servers[server_id].saveTimestamp = Number(data.ts);
+            }
+            return servers[server_id];
         }
 
-        serverData = Buffer.from(serverData?.data, "base64");
-        serverData = zlib.gunzipSync(serverData).toString();
-        let server = JSON.parse(serverData);
+        if (!force && servers[server_id]) {
+            return servers[server_id];
+        }
 
-        if (!server || !server.config) {
-            servers[server_id] = {config: {permissions: {}, vote_cooldown: 86_400}, quotes: [], voted_users: {}};
+        const {data, error} = await supabase
+            .from("servers")
+            .select("data")
+            .eq("server_id", server_id)
+            .maybeSingle();
+        if (error) throw error;
+
+        if (!data?.data) {
+            servers[server_id] = emptyServer();
             await saveServerData(server_id);
-            return;
+            return servers[server_id];
         }
-        // @ts-ignore
-        servers[server_id] = server;
 
-        servers[server_id].quotes.forEach((el, i) => {
-            if (!el.uuid) {
-                el.uuid = createUUID();
-            }
-            if (!el.history) {
-                el.history = {created: i, created_by: "unknown", edits: []}
-            }
-        })
+        hydrateServer(server_id, data.data as Server);
+        if (!servers[server_id]?.config) {
+            servers[server_id] = emptyServer();
+            await saveServerData(server_id);
+        }
     } catch {
-        servers[server_id] = {config: {permissions: {}, vote_cooldown: 86_400}, quotes: [], voted_users: {}};
+        servers[server_id] = emptyServer();
     }
-    servers[server_id].quotes = servers[server_id].quotes.sort((q1, q2) => {
-        if (q1.history.created < q2.history.created) {
-            return -1;
-        }
-        if (q1.history.created > q2.history.created) {
-            return 1;
-        }
-        return 0;
-    })
+
     return servers[server_id];
 }
 
 export async function saveServerData(server_id: string, _backup: boolean = false) {
-    let serverData = servers[server_id];
+    const serverData = servers[server_id];
     serverData.saveTimestamp = +new Date();
-    let buf = zlib.gzipSync(Buffer.from(JSON.stringify(serverData)));
-    let base64 = buf.toString("base64");
 
     if (_backup) {
-        await firebase.collection("backups").doc(server_id).collection("backups").doc(`${serverData.saveTimestamp}`).set({
-            data: base64,
-            ts: serverData.saveTimestamp
-        })
+        const {error} = await supabase.from("backups").upsert({
+            server_id,
+            ts: serverData.saveTimestamp,
+            data: serverData,
+        }, {onConflict: "server_id,ts"});
+        if (error) throw error;
         return serverData.saveTimestamp;
-    } else {
-        await firebase.collection("servers").doc(server_id).set({data: base64})
     }
+
+    const {error} = await supabase.from("servers").upsert({
+        server_id,
+        data: serverData,
+        save_timestamp: serverData.saveTimestamp,
+        updated_at: new Date().toISOString(),
+    }, {onConflict: "server_id"});
+    if (error) throw error;
 }
 
 export async function listBackups(server_id: string, count: number) {
-    let backupSnapshot = await firebase.collection("backups").doc(server_id).collection("backups").orderBy("ts", "desc").limit(count).get();
-    return backupSnapshot.docs.map(backup => {
-        let gzipData: string = backup.data().data;
-        let data: Server = JSON.parse(zlib.gunzipSync(Buffer.from(gzipData, "base64")).toString());
-        if (!data.saveTimestamp) data.saveTimestamp = Number(backup.id);
-        return data;
+    const {data, error} = await supabase
+        .from("backups")
+        .select("data, ts")
+        .eq("server_id", server_id)
+        .order("ts", {ascending: false})
+        .limit(count);
+    if (error) throw error;
+
+    return (data ?? []).map((backup) => {
+        const parsed = backup.data as Server;
+        if (!parsed.saveTimestamp) parsed.saveTimestamp = Number(backup.ts);
+        return parsed;
     });
 }
