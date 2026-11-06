@@ -5,16 +5,15 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=cytatownik
-Group=cytatownik
+User=root
 WorkingDirectory=/opt/cytatownik
 Environment=NODE_ENV=production
-ExecStart=/opt/cytatownik/node_modules/.bin/tsx src/index.ts
+# systemd nie ładuje nvm/fnm — użyj login shell, żeby wziąć Node 24 jak w `node -v`
+ExecStart=/bin/bash -lc 'cd /opt/cytatownik && exec node ./node_modules/tsx/dist/cli.mjs src/index.ts'
 Restart=always
 RestartSec=10
 KillMode=process
 
-# Hardening
 NoNewPrivileges=true
 PrivateTmp=true
 

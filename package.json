@@ -20,11 +20,13 @@
     "@supabase/supabase-js": "^2.119.0",
     "discord.js": "^14.25.1",
     "string-similarity": "^4.0.4",
-    "tsx": "^4.20.6"
+    "tsx": "^4.20.6",
+    "ws": "^8.22.1"
   },
   "devDependencies": {
     "@types/node": "^22.19.1",
     "@types/string-similarity": "^4.0.2",
+    "@types/ws": "^8.18.2",
     "typescript": "^5.9.3"
   }
 }

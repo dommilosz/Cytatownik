@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import ws from "ws";
 import {createClient} from "@supabase/supabase-js";
 import {createUUID} from "./util";
 import {Server, Servers} from "./types";
@@ -18,6 +19,8 @@ const config = JSON.parse(
 const supabase = createClient(config.supabaseUrl, config.supabaseKey, {
     db: {schema: "public_cytatownik"},
     auth: {persistSession: false, autoRefreshToken: false},
+    // Native WebSocket exists only on Node 22+; polyfill so systemd/Node 18 also works.
+    realtime: {transport: ws as unknown as typeof WebSocket},
 });
 
 export let servers: Servers = {};
